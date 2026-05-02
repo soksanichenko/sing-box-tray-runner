@@ -1,0 +1,15 @@
+{
+  "sing_box_path": "sing-box.exe",
+  "wintun_dll_path": "wintun.dll",
+  "config_path": "config.json",
+  "system_proxy_inbound": "",
+  "autostart": false,
+  "start_on_launch": false,
+  "default_mode": "system_proxy",
+  "log_lines": 200,
+  "tun": {
+    "interface_name": "singbox-tun",
+    "address": ["172.19.0.1/30"],
+    "mtu": 9000
+  }
+}
