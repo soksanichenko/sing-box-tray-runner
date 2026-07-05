@@ -34,6 +34,7 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 - Windows 10/11 x64
 - [sing-box](https://github.com/SagerNet/sing-box) binary
 - [wintun.dll](https://www.wintun.net/) — required only for TUN mode
+- Internet access to `api.github.com`/`github.com` — required only for the **Updates** feature (checking for and downloading sing-box or tray launcher updates); everything else works fully offline
 
 ## Installation
 
