@@ -1,0 +1,26 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (io.WriteCloser).Close
+        - (*archive/zip.ReadCloser).Close
+        - (golang.org/x/sys/windows/registry.Key).Close
+        - (*github.com/lxn/walk.FormBase).Close
+        - os.Remove
+        - golang.org/x/sys/windows.CloseHandle
+        - (*golang.org/x/sys/windows.LazyProc).Call
+        - (*net/http.Response).Body.Close
+        - fmt.Fprintf
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # package doc comments aren't this project's convention
+        - -ST1001 # dot-importing lxn/walk/declarative is that library's intended usage

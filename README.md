@@ -111,6 +111,12 @@ go install github.com/akavel/rsrc@latest
 rsrc -manifest app.manifest -o rsrc.syso
 ```
 
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`) — on every push/PR: `golangci-lint` (with `GOOS=windows`) plus a build matrix on `ubuntu-latest` and `windows-latest` to verify both `scripts/build.sh` and `scripts/build.ps1` work.
+- **Release** (`.github/workflows/release.yml`) — pushing a `v*` tag (e.g. `git tag v1.0.0 && git push --tags`) builds the exe and publishes it as a GitHub Release with auto-generated notes.
+- **Dependabot** (`.github/dependabot.yml`) — weekly PRs for Go module and GitHub Actions updates.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

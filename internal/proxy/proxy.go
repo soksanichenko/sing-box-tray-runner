@@ -12,7 +12,7 @@ import (
 const internetSettingsKey = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 
 var (
-	wininet              = windows.NewLazySystemDLL("wininet.dll")
+	wininet               = windows.NewLazySystemDLL("wininet.dll")
 	procInternetSetOption = wininet.NewProc("InternetSetOptionW")
 )
 

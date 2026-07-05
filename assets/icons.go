@@ -15,12 +15,12 @@ var (
 func makeICO(r, g, b byte) []byte {
 	const (
 		w, h        = 32, 32
-		rowStride   = w * 4                    // bytes per pixel row (BGRA)
-		pixDataSize = h * rowStride            // XOR (color) data
-		maskStride  = (w + 31) / 32 * 4       // AND mask row, DWORD-aligned
-		maskSize    = h * maskStride           // AND mask (all 0 = opaque)
+		rowStride   = w * 4                       // bytes per pixel row (BGRA)
+		pixDataSize = h * rowStride               // XOR (color) data
+		maskStride  = (w + 31) / 32 * 4           // AND mask row, DWORD-aligned
+		maskSize    = h * maskStride              // AND mask (all 0 = opaque)
 		bmpSize     = 40 + pixDataSize + maskSize // BITMAPINFOHEADER + data
-		dataOffset  = 6 + 16                  // after ICONDIR + ICONDIRENTRY
+		dataOffset  = 6 + 16                      // after ICONDIR + ICONDIRENTRY
 	)
 
 	buf := make([]byte, dataOffset+bmpSize)
@@ -32,23 +32,23 @@ func makeICO(r, g, b byte) []byte {
 
 	// ICONDIRENTRY (16 bytes at offset 6)
 	e := buf[6:]
-	e[0] = w  // width
-	e[1] = h  // height
-	e[2] = 0  // color count (0 = true color)
-	e[3] = 0  // reserved
-	binary.LittleEndian.PutUint16(e[4:], 1)   // planes
-	binary.LittleEndian.PutUint16(e[6:], 32)  // bits per pixel
+	e[0] = w                                 // width
+	e[1] = h                                 // height
+	e[2] = 0                                 // color count (0 = true color)
+	e[3] = 0                                 // reserved
+	binary.LittleEndian.PutUint16(e[4:], 1)  // planes
+	binary.LittleEndian.PutUint16(e[6:], 32) // bits per pixel
 	binary.LittleEndian.PutUint32(e[8:], uint32(bmpSize))
 	binary.LittleEndian.PutUint32(e[12:], uint32(dataOffset))
 
 	// BITMAPINFOHEADER (40 bytes at dataOffset)
 	bh := buf[dataOffset:]
-	binary.LittleEndian.PutUint32(bh[0:], 40)       // biSize
-	binary.LittleEndian.PutUint32(bh[4:], w)        // biWidth
-	binary.LittleEndian.PutUint32(bh[8:], h*2)      // biHeight = 2×h (includes mask)
-	binary.LittleEndian.PutUint16(bh[12:], 1)       // biPlanes
-	binary.LittleEndian.PutUint16(bh[14:], 32)      // biBitCount
-	binary.LittleEndian.PutUint32(bh[16:], 0)       // biCompression = BI_RGB
+	binary.LittleEndian.PutUint32(bh[0:], 40)  // biSize
+	binary.LittleEndian.PutUint32(bh[4:], w)   // biWidth
+	binary.LittleEndian.PutUint32(bh[8:], h*2) // biHeight = 2×h (includes mask)
+	binary.LittleEndian.PutUint16(bh[12:], 1)  // biPlanes
+	binary.LittleEndian.PutUint16(bh[14:], 32) // biBitCount
+	binary.LittleEndian.PutUint32(bh[16:], 0)  // biCompression = BI_RGB
 	binary.LittleEndian.PutUint32(bh[20:], uint32(pixDataSize))
 
 	// XOR mask (BGRA pixel data, bottom-up)

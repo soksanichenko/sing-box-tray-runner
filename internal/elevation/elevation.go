@@ -23,15 +23,11 @@ type tokenElevation struct {
 
 // IsElevated returns true if the current process token has elevated privileges.
 func IsElevated() bool {
-	token, err := windows.OpenCurrentProcessToken()
-	if err != nil {
-		return false
-	}
-	defer token.Close()
+	token := windows.GetCurrentProcessToken()
 
 	var elev tokenElevation
 	var size uint32
-	err = windows.GetTokenInformation(
+	err := windows.GetTokenInformation(
 		token,
 		windows.TokenElevation,
 		(*byte)(unsafe.Pointer(&elev)),

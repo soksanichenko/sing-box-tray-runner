@@ -47,6 +47,10 @@ assets/
 scripts/
   build.sh            — build wrapper for Linux/macOS/WSL hosts
   build.ps1           — build wrapper for native Windows hosts (no `make` needed)
+.github/
+  workflows/ci.yml      — golangci-lint + build matrix (ubuntu-latest, windows-latest)
+  workflows/release.yml — on `v*` tag push: builds and publishes a GitHub Release
+  dependabot.yml         — weekly gomod + github-actions update PRs
 ```
 
 ## Key decisions and constraints
@@ -71,6 +75,8 @@ scripts/
 **Stop→Start race**: `pendingStart bool` in `App`. If `start()` is called while state is `StateStopping`, it sets the flag and returns; `stop()` checks the flag after completing and calls `start()`.
 
 **sing-box auto-updater** (`internal/updater/updater.go`): fetches `GET /repos/SagerNet/sing-box/releases?per_page=10` (no auth, requires a `User-Agent` header). Channel selection scans that list rather than using `/releases/latest`: `alpha` takes the first non-draft entry, `stable` takes the first non-draft, non-prerelease entry — this also lets `stable` correctly skip past newer alphas. The Windows asset is matched by exact suffix `-windows-amd64.zip`, which naturally excludes the `-legacy-windows-7.zip` variant (different suffix). The zip's contents are nested one level down (e.g. `sing-box-1.13.14-windows-amd64/{sing-box.exe, libcronet.dll, LICENSE}`); extraction strips whatever that single top-level directory is named (not hardcoded) and copies everything inside it — `libcronet.dll` is a runtime dependency of `sing-box.exe`, not just packaging. Installs go into `<exeDir>/sing-box/<tag>/`, tray.go points `sing_box_path` at the new copy and prunes sibling version directories. There is no `installed_version` config field — `updater.InstalledVersion` derives the current version by checking whether `sing_box_path` matches `<managedRoot>/<tag>/sing-box.exe`, so it can't go stale if the user hand-edits the path. The startup check (`OnReady`) only ever pushes a toast notification; it never auto-installs — only the interactive "Check for Updates" menu path (`checkForUpdate(true)`) prompts and downloads.
+
+**Linting** (`.golangci.yml`): CI runs `golangci-lint` with `GOOS=windows` (the whole codebase is behind `//go:build windows`, so without it nothing gets analyzed). `errcheck` excludes ignoring the error from `Close()`/`Call()` on file handles, registry keys, `*walk.FormBase`, and Win32 `LazyProc` calls — established convention throughout this codebase, not something to "fix" file-by-file. `staticcheck`'s `ST1001` (no dot-imports) is disabled because `. "github.com/lxn/walk/declarative"` is that library's intended usage; `ST1000` (package doc comments) is disabled because it isn't this project's convention.
 
 **Localization** (`internal/i18n/i18n.go`): `Strings` covers every UI-facing string (tray menu, tooltips, toast/dialog text, Settings/Log window chrome), embedded per-language as `assets/locales/{en,ru,ua}.json` and loaded at `init()`. `tray-config.json`'s `language` field is resolved once in `main.go` (`i18n.Resolve`, falling back to `i18n.Detect()` which reads `GetUserDefaultUILanguage` via kernel32) and passed into `tray.NewApp` — the `App.strs` field is otherwise never recomputed. Per the user's global logging convention, `a.log(...)` calls are deliberately **not** localized and stay in English always; only `i18n` covers the interactive UI.
 
