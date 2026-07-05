@@ -18,7 +18,17 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
 - Auto-updates the `sing-box` binary itself from GitHub Releases (stable or alpha channel)
 - UI in English, Russian, or Ukrainian — auto-detected from the Windows locale
 
-## Requirements
+## Build requirements
+
+Only the Go toolchain is needed, on either host platform — no C compiler, no Windows SDK. Nothing in this project uses cgo (`CGO_ENABLED=0` in the Makefile/scripts is mandatory, not just a preference: all Windows API calls go through `syscall`/`golang.org/x/sys/windows`, never cgo), so there's nothing to cross-compile besides Go itself.
+
+- **Go** — matching or newer than the version pinned in `go.mod` (currently `1.25.9`). Since Go 1.21, the `go` directive in `go.mod` is an enforced minimum: an older toolchain on `PATH` will auto-fetch the pinned one via `GOTOOLCHAIN=auto` if network access is available.
+- **On Linux/macOS/WSL**: `./scripts/build.sh` cross-compiles to `build/sing_box_tray_runner.exe`.
+- **On native Windows**: `scripts\build.ps1` (PowerShell) builds the same output, no `make` required.
+- **`make`** is optional — only needed if you use `make build` instead of the scripts above.
+- Regenerating `rsrc.syso` (only if `app.manifest` changes) needs `github.com/akavel/rsrc` — a pure-Go tool, installable and runnable on Linux too (see [Building](#building)).
+
+## Runtime requirements
 
 - Windows 10/11 x64
 - [sing-box](https://github.com/SagerNet/sing-box) binary
@@ -93,8 +103,6 @@ The tray checks GitHub for a new sing-box release on startup (a toast notificati
 The UI (tray menu, dialogs, notifications, Settings/Log windows) is available in English, Russian, and Ukrainian. `language: "auto"` detects the language from the Windows UI locale; set it to `en`, `ru`, or `ua` in `tray-config.json` to override. Log output stays in English regardless of UI language.
 
 ## Building
-
-Requires Go 1.19+.
 
 ```sh
 make build          # any host with `make`
