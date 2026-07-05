@@ -1,5 +1,7 @@
 # sing-box-tray — project notes for Claude
 
+Windows-only today (see below), but a native Linux port is planned — see `docs/linux-port.md` for the agreed scope/architecture before touching anything Linux-related.
+
 ## Build
 
 Windows-only project, cross-compiled from Linux:
@@ -14,6 +16,8 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
   -ldflags="-H windowsgui -s -w" \
   -o build/sing_box_tray_runner.exe .
 ```
+
+`scripts/build.sh`/`build.ps1` accept an optional `VERSION` env var, appended as `-ldflags -X .../internal/version.Version=$VERSION` — `release.yml` sets it from the pushed tag; unset (dev builds) leaves `version.Version` at its `"dev"` default.
 
 `rsrc.syso` in the repo root is a pre-generated Windows resource object that embeds `app.manifest` (Common Controls v6 dependency). The Go toolchain links it automatically. Without it, `lxn/walk` windows fail silently. Regenerate with:
 
@@ -92,6 +96,7 @@ scripts/
 | `wintun_dll_path` | `wintun.dll` | copied to sing-box dir if missing |
 | `config_path` | `config.json` | base sing-box config, not modified |
 | `system_proxy_inbound` | `""` | tag of the http/mixed inbound; empty = first found |
+| `autostart` | `false` | write-only mirror of the Task Scheduler entry, set by `toggleAutostart`; actual state on startup comes from `autostart.IsEnabled()`, not this field |
 | `default_mode` | `system_proxy` | `off` / `system_proxy` / `tun` |
 | `start_on_launch` | `false` | auto-start sing-box when tray starts |
 | `log_lines` | `200` | circular log buffer size |

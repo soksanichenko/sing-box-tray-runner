@@ -52,6 +52,7 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
   "wintun_dll_path": "wintun.dll",
   "config_path": "config.json",
   "system_proxy_inbound": "",
+  "autostart": false,
   "default_mode": "system_proxy",
   "start_on_launch": false,
   "log_lines": 200,
@@ -82,6 +83,7 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 | `wintun_dll_path` | Path to `wintun.dll`. Copied next to `sing-box.exe` on TUN start if not already present. |
 | `config_path` | Path to the sing-box `config.json`. This file is never modified. |
 | `system_proxy_inbound` | Tag of the `http` or `mixed` inbound to read the proxy address from. Leave empty to use the first one found. |
+| `autostart` | Kept in sync with the tray's "Autostart" checkbox (whether the Task Scheduler entry exists); not meant to be hand-edited. |
 | `default_mode` | Starting mode: `off`, `system_proxy`, or `tun`. |
 | `start_on_launch` | If `true`, sing-box starts automatically when the tray app launches. |
 | `log_lines` | Size of the in-memory log buffer shown in the log viewer. |
@@ -123,7 +125,7 @@ make build          # any host with `make`
 scripts\build.ps1    # native Windows (PowerShell), no `make` required
 ```
 
-The output is `build/sing_box_tray_runner.exe`.
+The output is `build/sing_box_tray_runner.exe`. Set a `VERSION` env var (e.g. `VERSION=v1.2.3 ./scripts/build.sh`) to embed a version string the tray launcher's self-updater can compare against — this is how `release.yml` builds tagged releases; local dev builds leave it unset (`"dev"`).
 
 The `rsrc.syso` file in the repo root embeds a Windows manifest (Common Controls v6). It is linked automatically by the Go toolchain and enables proper visual styling for the Settings and Log windows. Regenerate it if the manifest changes:
 
