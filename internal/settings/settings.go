@@ -11,6 +11,7 @@ import (
 	"github.com/lxn/win"
 
 	"github.com/zelgray/sing-box-tray/internal/config"
+	"github.com/zelgray/sing-box-tray/internal/i18n"
 )
 
 var (
@@ -20,7 +21,7 @@ var (
 
 // Show opens the settings window, or brings it to front if already open.
 // onSave is called with the updated config when the user clicks Save.
-func Show(cfg *config.TrayConfig, onSave func(*config.TrayConfig)) {
+func Show(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayConfig)) {
 	mu.Lock()
 	existing := mw
 	mu.Unlock()
@@ -33,14 +34,15 @@ func Show(cfg *config.TrayConfig, onSave func(*config.TrayConfig)) {
 		return
 	}
 
-	go runWindow(cfg, onSave)
+	go runWindow(cfg, strs, onSave)
 }
 
-func runWindow(cfg *config.TrayConfig, onSave func(*config.TrayConfig)) {
+func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayConfig)) {
 	runtime.LockOSThread()
 
 	var w *walk.MainWindow
 	var singBoxEdit, wintunEdit, configEdit *walk.LineEdit
+	var alphaCheck *walk.CheckBox
 
 	browseFn := func(edit **walk.LineEdit, filter string) func() {
 		return func() {
@@ -56,35 +58,42 @@ func runWindow(cfg *config.TrayConfig, onSave func(*config.TrayConfig)) {
 
 	if err := (MainWindow{
 		AssignTo: &w,
-		Title:    "sing-box-tray — Settings",
-		MinSize:  Size{Width: 550, Height: 185},
-		MaxSize:  Size{Width: 900, Height: 185},
+		Title:    strs.SettingsTitle,
+		MinSize:  Size{Width: 550, Height: 215},
+		MaxSize:  Size{Width: 900, Height: 215},
 		Layout:   Grid{Columns: 3, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 6},
 		Children: []Widget{
-			Label{Text: "sing-box path:"},
+			Label{Text: strs.SettingsSingBoxPath},
 			LineEdit{AssignTo: &singBoxEdit, Text: cfg.SingBoxPath, MinSize: Size{Width: 350}},
-			PushButton{Text: "Browse...", OnClicked: browseFn(&singBoxEdit, "Executables (*.exe)|*.exe|All files (*.*)|*.*")},
+			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&singBoxEdit, "Executables (*.exe)|*.exe|All files (*.*)|*.*")},
 
-			Label{Text: "wintun.dll path:"},
+			Label{Text: strs.SettingsWintunPath},
 			LineEdit{AssignTo: &wintunEdit, Text: cfg.WintunDllPath},
-			PushButton{Text: "Browse...", OnClicked: browseFn(&wintunEdit, "DLL files (*.dll)|*.dll|All files (*.*)|*.*")},
+			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&wintunEdit, "DLL files (*.dll)|*.dll|All files (*.*)|*.*")},
 
-			Label{Text: "config.json path:"},
+			Label{Text: strs.SettingsConfigPath},
 			LineEdit{AssignTo: &configEdit, Text: cfg.ConfigPath},
-			PushButton{Text: "Browse...", OnClicked: browseFn(&configEdit, "JSON files (*.json)|*.json|All files (*.*)|*.*")},
+			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&configEdit, "JSON files (*.json)|*.json|All files (*.*)|*.*")},
+
+			CheckBox{AssignTo: &alphaCheck, Text: strs.SettingsAlphaChannel, ColumnSpan: 3, Checked: cfg.Update.Channel == "alpha"},
 
 			HSpacer{ColumnSpan: 2},
 			Composite{
 				Layout: HBox{MarginsZero: true},
 				Children: []Widget{
-					PushButton{Text: "Save", OnClicked: func() {
+					PushButton{Text: strs.SettingsSave, OnClicked: func() {
 						cfg.SingBoxPath = singBoxEdit.Text()
 						cfg.WintunDllPath = wintunEdit.Text()
 						cfg.ConfigPath = configEdit.Text()
+						if alphaCheck.Checked() {
+							cfg.Update.Channel = "alpha"
+						} else {
+							cfg.Update.Channel = "stable"
+						}
 						onSave(cfg)
 						w.Close()
 					}},
-					PushButton{Text: "Cancel", OnClicked: func() { w.Close() }},
+					PushButton{Text: strs.SettingsCancel, OnClicked: func() { w.Close() }},
 				},
 			},
 		},

@@ -16,6 +16,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
 
+	"github.com/zelgray/sing-box-tray/internal/i18n"
 	"github.com/zelgray/sing-box-tray/internal/logbuf"
 )
 
@@ -25,7 +26,7 @@ var (
 )
 
 // Show opens the log viewer window, or brings it to front if already open.
-func Show(buf *logbuf.Buffer, maxLines int) {
+func Show(buf *logbuf.Buffer, maxLines int, strs i18n.Strings) {
 	mu.Lock()
 	existing := mw
 	mu.Unlock()
@@ -38,10 +39,10 @@ func Show(buf *logbuf.Buffer, maxLines int) {
 		return
 	}
 
-	go runWindow(buf, maxLines)
+	go runWindow(buf, maxLines, strs)
 }
 
-func runWindow(buf *logbuf.Buffer, maxLines int) {
+func runWindow(buf *logbuf.Buffer, maxLines int, strs i18n.Strings) {
 	runtime.LockOSThread()
 
 	var w *walk.MainWindow
@@ -49,7 +50,7 @@ func runWindow(buf *logbuf.Buffer, maxLines int) {
 
 	if err := (MainWindow{
 		AssignTo: &w,
-		Title:    "sing-box logs",
+		Title:    strs.LogWindowTitle,
 		MinSize:  Size{Width: 700, Height: 400},
 		Size:     Size{Width: 900, Height: 500},
 		Layout:   VBox{MarginsZero: true},

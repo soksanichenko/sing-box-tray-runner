@@ -9,12 +9,14 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   - **System Proxy** — sets Windows HTTP proxy from the sing-box config inbound
   - **TUN** — injects a TUN inbound into a temp config, requires elevation
 - Tray icon reflects state: grey = stopped, green = running, red = crashed
-- Settings window to configure paths (sing-box, wintun.dll, config.json)
+- Settings window to configure paths (sing-box, wintun.dll, config.json) and the update channel
 - Log viewer with live updates
 - Crash detection with desktop notification
 - File watcher — prompts to restart when config files change
 - Autostart via Task Scheduler (`/RL HIGHEST` for TUN mode)
 - Single instance enforced via named kernel mutex
+- Auto-updates the `sing-box` binary itself from GitHub Releases (stable or alpha channel)
+- UI in English, Russian, or Ukrainian — auto-detected from the Windows locale
 
 ## Requirements
 
@@ -41,6 +43,15 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   "default_mode": "system_proxy",
   "start_on_launch": false,
   "log_lines": 200,
+  "language": "auto",
+  "system_proxy": {
+    "tag": "mixed-in",
+    "listen": "127.0.0.1",
+    "listen_port": 2080
+  },
+  "update": {
+    "channel": "stable"
+  },
   "tun": {
     "interface_name": "singbox-tun",
     "address": ["172.19.0.1/30"],
@@ -51,13 +62,16 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
 
 | Field | Description |
 |---|---|
-| `sing_box_path` | Path to `sing-box.exe`. Relative paths are resolved from the tray exe directory. |
+| `sing_box_path` | Path to `sing-box.exe`. Relative paths are resolved from the tray exe directory. Rewritten automatically after an auto-update. |
 | `wintun_dll_path` | Path to `wintun.dll`. Copied next to `sing-box.exe` on TUN start if not already present. |
 | `config_path` | Path to the sing-box `config.json`. This file is never modified. |
 | `system_proxy_inbound` | Tag of the `http` or `mixed` inbound to read the proxy address from. Leave empty to use the first one found. |
 | `default_mode` | Starting mode: `off`, `system_proxy`, or `tun`. |
 | `start_on_launch` | If `true`, sing-box starts automatically when the tray app launches. |
 | `log_lines` | Size of the in-memory log buffer shown in the log viewer. |
+| `language` | UI language: `auto` (detect from Windows), `en`, `ru`, or `ua`. |
+| `system_proxy.*` | Default `mixed` inbound injected when running in System Proxy mode and the base `config.json` has none. |
+| `update.channel` | `stable` or `alpha` — which sing-box releases the updater considers. |
 | `tun.*` | TUN interface settings injected at runtime. The base `config.json` does not need a TUN section. |
 
 ### System Proxy mode
@@ -70,12 +84,22 @@ The tray injects a `tun` inbound and a `route.auto_detect_interface: true` setti
 
 The tray also prepends a route rule that sends sing-box's own process traffic via `direct`, preventing it from being re-captured by the TUN interface.
 
+### Auto-update
+
+The tray checks GitHub for a new sing-box release on startup (a toast notification appears if one is available) and via **Check for Updates** in the tray menu at any time. Updates are downloaded into a tray-managed `sing-box/<version>/` folder next to the executable; `sing_box_path` is switched to point at the new version automatically, and older versions are removed. `update.channel` (or the checkbox in Settings) picks between `stable` releases and `alpha` pre-releases.
+
+### Localization
+
+The UI (tray menu, dialogs, notifications, Settings/Log windows) is available in English, Russian, and Ukrainian. `language: "auto"` detects the language from the Windows UI locale; set it to `en`, `ru`, or `ua` in `tray-config.json` to override. Log output stays in English regardless of UI language.
+
 ## Building
 
-Requires Go 1.19+. Cross-compile from Linux or build on Windows:
+Requires Go 1.19+.
 
 ```sh
-make build
+make build          # any host with `make`
+./scripts/build.sh   # Linux/macOS/WSL, no `make` required
+scripts\build.ps1    # native Windows (PowerShell), no `make` required
 ```
 
 The output is `build/sing_box_tray_runner.exe`.

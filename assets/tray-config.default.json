@@ -7,6 +7,15 @@
   "start_on_launch": false,
   "default_mode": "system_proxy",
   "log_lines": 200,
+  "language": "auto",
+  "system_proxy": {
+    "tag": "mixed-in",
+    "listen": "127.0.0.1",
+    "listen_port": 2080
+  },
+  "update": {
+    "channel": "stable"
+  },
   "tun": {
     "interface_name": "singbox-tun",
     "address": ["172.19.0.1/30"],

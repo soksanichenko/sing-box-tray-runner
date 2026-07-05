@@ -1,7 +1,7 @@
 .PHONY: build clean
 
 BUILD_DIR := build
-OUTPUT    := $(BUILD_DIR)/sing-box-tray.exe
+OUTPUT    := $(BUILD_DIR)/sing_box_tray_runner.exe
 
 build:
 	@mkdir -p $(BUILD_DIR)

@@ -1,0 +1,51 @@
+{
+  "menu_settings": "Налаштування...",
+  "menu_settings_tip": "Змінити шляхи",
+  "menu_start": "Запустити",
+  "menu_start_tip": "Запустити sing-box",
+  "menu_stop": "Зупинити",
+  "menu_stop_tip": "Зупинити sing-box",
+  "menu_restart": "Перезапустити",
+  "menu_restart_tip": "Перезапустити sing-box",
+  "menu_mode": "Режим",
+  "mode_off": "Вимкнено",
+  "mode_system_proxy": "Системний проксі",
+  "mode_tun": "TUN (потрібні права адміністратора)",
+  "menu_autostart": "Автозапуск",
+  "menu_autostart_tip": "Запускати під час входу в Windows",
+  "menu_check_update": "Перевірити оновлення",
+  "menu_view_logs": "Перегляд логів",
+  "menu_exit": "Вихід",
+
+  "tooltip_stopped": "sing-box зупинено",
+  "tooltip_running_fmt": "sing-box запущено (%s)",
+  "tooltip_crashed": "sing-box аварійно завершився",
+
+  "toast_crashed_title": "sing-box зупинено",
+  "toast_crashed_msg": "sing-box несподівано завершив роботу.",
+  "toast_update_title": "Доступне оновлення",
+  "toast_update_msg_fmt": "Доступна версія sing-box %s. Встановіть її через пункт «Перевірити оновлення».",
+
+  "dialog_config_changed_fmt": "%s змінено.\nПерезапустити sing-box, щоб застосувати зміни?",
+  "dialog_update_available_fmt": "Доступна нова версія sing-box: %s (поточна: %s).\n\nЗавантажити та встановити зараз?",
+  "dialog_update_none_fmt": "У вас уже встановлена остання версія sing-box (%s).",
+  "dialog_restart_now_fmt": "sing-box оновлено до версії %s.\nПерезапустити зараз, щоб застосувати?",
+  "dialog_error_fmt": "%s",
+  "dialog_version_unknown": "немає",
+
+  "settings_title": "sing-box-tray — Налаштування",
+  "settings_sing_box_path": "Шлях до sing-box:",
+  "settings_wintun_path": "Шлях до wintun.dll:",
+  "settings_config_path": "Шлях до config.json:",
+  "settings_browse": "Огляд...",
+  "settings_alpha_channel": "Використовувати альфа-версії",
+  "settings_save": "Зберегти",
+  "settings_cancel": "Скасувати",
+
+  "log_window_title": "Логи sing-box",
+
+  "startup_err_mutex_fmt": "Не вдалося створити м'ютекс: %s",
+  "startup_err_exe_path_fmt": "Не вдалося визначити шлях до виконуваного файлу:\n%s",
+  "startup_err_config_fmt": "Не вдалося завантажити tray-config.json:\n%s",
+  "startup_err_elevate_fmt": "Не вдалося підвищити права процесу:\n%s"
+}

@@ -12,34 +12,32 @@ import (
 	"github.com/zelgray/sing-box-tray/internal/config"
 )
 
-// InjectTUN reads the sing-box config at sbConfigPath, removes any existing
-// tun inbound, appends a new one from cfg, prepends a process-exclusion route
-// rule so sing-box's own traffic is not looped back through TUN, writes the
-// result to a temp file, and returns its path.
+// InjectTUN reads the sing-box config at sbConfigPath and strips any inbound
+// that is not a tun inbound (so an http/mixed inbound left over from the base
+// config isn't run alongside TUN). If the base config already has a tun
+// inbound, it is kept as-is; otherwise a default one built from cfg is
+// appended. Prepends a process-exclusion route rule so sing-box's own traffic
+// is not looped back through TUN, writes the result to a temp file, and
+// returns its path.
 func InjectTUN(sbConfigPath string, cfg config.TUNConfig, singBoxPath string) (string, error) {
-	data, err := os.ReadFile(sbConfigPath)
-	if err != nil {
-		return "", fmt.Errorf("read sing-box config: %w", err)
-	}
-
-	// Parse config as a generic map to preserve all fields.
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(data, &root); err != nil {
-		return "", fmt.Errorf("parse sing-box config: %w", err)
-	}
-
-	// Strip any existing tun inbound.
-	inbounds, err := filterInbounds(root["inbounds"])
+	root, err := config.LoadRawSingBoxConfig(sbConfigPath)
 	if err != nil {
 		return "", err
 	}
 
-	tunInbound := buildTUNInbound(cfg)
-	tunRaw, err := json.Marshal(tunInbound)
+	inbounds, err := config.FilterInbounds(root["inbounds"], "tun")
 	if err != nil {
-		return "", fmt.Errorf("marshal tun inbound: %w", err)
+		return "", err
 	}
-	inbounds = append(inbounds, json.RawMessage(tunRaw))
+
+	if len(inbounds) == 0 {
+		tunInbound := buildTUNInbound(cfg)
+		tunRaw, err := json.Marshal(tunInbound)
+		if err != nil {
+			return "", fmt.Errorf("marshal tun inbound: %w", err)
+		}
+		inbounds = append(inbounds, json.RawMessage(tunRaw))
+	}
 
 	inboundsRaw, err := json.Marshal(inbounds)
 	if err != nil {
@@ -53,22 +51,7 @@ func InjectTUN(sbConfigPath string, cfg config.TUNConfig, singBoxPath string) (s
 		return "", err
 	}
 
-	merged, err := json.MarshalIndent(root, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshal merged config: %w", err)
-	}
-
-	tmp, err := os.CreateTemp("", "sing-box-tun-*.json")
-	if err != nil {
-		return "", fmt.Errorf("create temp config: %w", err)
-	}
-	defer tmp.Close()
-
-	if _, err := tmp.Write(merged); err != nil {
-		os.Remove(tmp.Name())
-		return "", fmt.Errorf("write temp config: %w", err)
-	}
-	return tmp.Name(), nil
+	return config.WriteRawSingBoxConfig(root)
 }
 
 // EnsureWintunDll copies wintun.dll from src to dstDir/wintun.dll if the
@@ -82,28 +65,6 @@ func EnsureWintunDll(src, dstDir string) error {
 		return nil // already present
 	}
 	return copyFile(src, dst)
-}
-
-// filterInbounds parses the inbounds JSON array and removes any tun entries.
-func filterInbounds(raw json.RawMessage) ([]json.RawMessage, error) {
-	if raw == nil {
-		return []json.RawMessage{}, nil
-	}
-	var items []json.RawMessage
-	if err := json.Unmarshal(raw, &items); err != nil {
-		return nil, fmt.Errorf("parse inbounds: %w", err)
-	}
-	out := items[:0]
-	for _, item := range items {
-		var t struct {
-			Type string `json:"type"`
-		}
-		_ = json.Unmarshal(item, &t)
-		if t.Type != "tun" {
-			out = append(out, item)
-		}
-	}
-	return out, nil
 }
 
 func buildTUNInbound(cfg config.TUNConfig) map[string]any {

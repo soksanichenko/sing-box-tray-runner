@@ -1,0 +1,138 @@
+//go:build windows
+
+package i18n
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"golang.org/x/sys/windows"
+
+	"github.com/zelgray/sing-box-tray/assets"
+)
+
+type Lang string
+
+const (
+	EN Lang = "en"
+	RU Lang = "ru"
+	UA Lang = "ua"
+)
+
+// Strings holds every user-facing UI string (tray menu, dialogs, toast
+// notifications, Settings/Log window chrome). Log messages are deliberately
+// not covered here — they stay in English regardless of UI language.
+type Strings struct {
+	MenuSettings     string `json:"menu_settings"`
+	MenuSettingsTip  string `json:"menu_settings_tip"`
+	MenuStart        string `json:"menu_start"`
+	MenuStartTip     string `json:"menu_start_tip"`
+	MenuStop         string `json:"menu_stop"`
+	MenuStopTip      string `json:"menu_stop_tip"`
+	MenuRestart      string `json:"menu_restart"`
+	MenuRestartTip   string `json:"menu_restart_tip"`
+	MenuMode         string `json:"menu_mode"`
+	ModeOff          string `json:"mode_off"`
+	ModeSystemProxy  string `json:"mode_system_proxy"`
+	ModeTUN          string `json:"mode_tun"`
+	MenuAutostart    string `json:"menu_autostart"`
+	MenuAutostartTip string `json:"menu_autostart_tip"`
+	MenuCheckUpdate  string `json:"menu_check_update"`
+	MenuViewLogs     string `json:"menu_view_logs"`
+	MenuExit         string `json:"menu_exit"`
+
+	TooltipStopped    string `json:"tooltip_stopped"`
+	TooltipRunningFmt string `json:"tooltip_running_fmt"`
+	TooltipCrashed    string `json:"tooltip_crashed"`
+
+	ToastCrashedTitle string `json:"toast_crashed_title"`
+	ToastCrashedMsg   string `json:"toast_crashed_msg"`
+	ToastUpdateTitle  string `json:"toast_update_title"`
+	ToastUpdateMsgFmt string `json:"toast_update_msg_fmt"`
+
+	DialogConfigChangedFmt   string `json:"dialog_config_changed_fmt"`
+	DialogUpdateAvailableFmt string `json:"dialog_update_available_fmt"`
+	DialogUpdateNoneFmt      string `json:"dialog_update_none_fmt"`
+	DialogRestartNowFmt      string `json:"dialog_restart_now_fmt"`
+	DialogErrorFmt           string `json:"dialog_error_fmt"`
+	DialogVersionUnknown     string `json:"dialog_version_unknown"`
+
+	SettingsTitle        string `json:"settings_title"`
+	SettingsSingBoxPath  string `json:"settings_sing_box_path"`
+	SettingsWintunPath   string `json:"settings_wintun_path"`
+	SettingsConfigPath   string `json:"settings_config_path"`
+	SettingsBrowse       string `json:"settings_browse"`
+	SettingsAlphaChannel string `json:"settings_alpha_channel"`
+	SettingsSave         string `json:"settings_save"`
+	SettingsCancel       string `json:"settings_cancel"`
+
+	LogWindowTitle string `json:"log_window_title"`
+
+	StartupErrMutexFmt   string `json:"startup_err_mutex_fmt"`
+	StartupErrExePathFmt string `json:"startup_err_exe_path_fmt"`
+	StartupErrConfigFmt  string `json:"startup_err_config_fmt"`
+	StartupErrElevateFmt string `json:"startup_err_elevate_fmt"`
+}
+
+var catalog map[Lang]Strings
+
+func init() {
+	catalog = make(map[Lang]Strings, 3)
+	for lang, file := range map[Lang]string{EN: "en", RU: "ru", UA: "ua"} {
+		data, err := assets.LocaleFS.ReadFile("locales/" + file + ".json")
+		if err != nil {
+			panic(fmt.Sprintf("i18n: missing locale file %s.json: %s", file, err))
+		}
+		var s Strings
+		if err := json.Unmarshal(data, &s); err != nil {
+			panic(fmt.Sprintf("i18n: invalid locale file %s.json: %s", file, err))
+		}
+		catalog[lang] = s
+	}
+}
+
+// Resolve maps a tray-config.json "language" value to a Lang, falling back
+// to OS auto-detection for "auto", empty, or unrecognized values.
+func Resolve(configValue string) Lang {
+	switch strings.ToLower(configValue) {
+	case "en":
+		return EN
+	case "ru":
+		return RU
+	case "ua":
+		return UA
+	default:
+		return Detect()
+	}
+}
+
+// Detect maps the Windows UI language to a supported Lang, defaulting to EN.
+func Detect() Lang {
+	switch getUserDefaultUILanguage() & 0x3FF { // primary language ID
+	case 0x19: // LANG_RUSSIAN
+		return RU
+	case 0x22: // LANG_UKRAINIAN
+		return UA
+	default:
+		return EN
+	}
+}
+
+// Get returns the string catalog for lang, falling back to English.
+func Get(lang Lang) Strings {
+	if s, ok := catalog[lang]; ok {
+		return s
+	}
+	return catalog[EN]
+}
+
+var (
+	kernel32                     = windows.NewLazySystemDLL("kernel32.dll")
+	procGetUserDefaultUILanguage = kernel32.NewProc("GetUserDefaultUILanguage")
+)
+
+func getUserDefaultUILanguage() uint16 {
+	ret, _, _ := procGetUserDefaultUILanguage.Call()
+	return uint16(ret)
+}

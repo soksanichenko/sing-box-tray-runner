@@ -18,6 +18,7 @@ import (
 	"github.com/zelgray/sing-box-tray/internal/autostart"
 	"github.com/zelgray/sing-box-tray/internal/config"
 	"github.com/zelgray/sing-box-tray/internal/elevation"
+	"github.com/zelgray/sing-box-tray/internal/i18n"
 	"github.com/zelgray/sing-box-tray/internal/logbuf"
 	"github.com/zelgray/sing-box-tray/internal/logwin"
 	"github.com/zelgray/sing-box-tray/internal/process"
@@ -25,25 +26,29 @@ import (
 	"github.com/zelgray/sing-box-tray/internal/settings"
 	"github.com/zelgray/sing-box-tray/internal/state"
 	"github.com/zelgray/sing-box-tray/internal/tun"
+	"github.com/zelgray/sing-box-tray/internal/updater"
 	"github.com/zelgray/sing-box-tray/internal/watcher"
 )
 
+const appTitle = "sing-box-tray"
+
 var (
-	user32         = windows.NewLazySystemDLL("user32.dll")
-	procMsgBox     = user32.NewProc("MessageBoxW")
+	user32     = windows.NewLazySystemDLL("user32.dll")
+	procMsgBox = user32.NewProc("MessageBoxW")
 )
 
 type menuItems struct {
-	settings  *systray.MenuItem
-	start     *systray.MenuItem
-	stop      *systray.MenuItem
-	restart   *systray.MenuItem
-	modeOff   *systray.MenuItem
-	modeProxy *systray.MenuItem
-	modeTUN   *systray.MenuItem
-	autostart *systray.MenuItem
-	viewLogs  *systray.MenuItem
-	quit      *systray.MenuItem
+	settings    *systray.MenuItem
+	start       *systray.MenuItem
+	stop        *systray.MenuItem
+	restart     *systray.MenuItem
+	modeOff     *systray.MenuItem
+	modeProxy   *systray.MenuItem
+	modeTUN     *systray.MenuItem
+	autostart   *systray.MenuItem
+	checkUpdate *systray.MenuItem
+	viewLogs    *systray.MenuItem
+	quit        *systray.MenuItem
 }
 
 // App orchestrates the sing-box process, proxy settings, and tray UI.
@@ -55,6 +60,7 @@ type App struct {
 	logBuf       *logbuf.Buffer
 	logFile      *os.File
 	releaseMutex func()
+	strs         i18n.Strings
 
 	mu           sync.Mutex
 	items        menuItems
@@ -62,13 +68,14 @@ type App struct {
 	pendingStart bool
 }
 
-func NewApp(cfg *config.TrayConfig, exeDir string, initialMode state.ProxyMode, releaseMutex func()) *App {
+func NewApp(cfg *config.TrayConfig, exeDir string, initialMode state.ProxyMode, releaseMutex func(), strs i18n.Strings) *App {
 	a := &App{
 		cfg:          cfg,
 		exeDir:       exeDir,
 		st:           state.NewManager(initialMode),
 		logBuf:       logbuf.New(cfg.LogLines),
 		releaseMutex: releaseMutex,
+		strs:         strs,
 	}
 
 	logPath := filepath.Join(exeDir, "sing-box-tray.log")
@@ -95,28 +102,31 @@ func (a *App) log(format string, args ...any) {
 
 func (a *App) OnReady() {
 	systray.SetIcon(assets.IconGrey)
-	systray.SetTooltip("sing-box is stopped")
+	systray.SetTooltip(a.strs.TooltipStopped)
 
-	mSettings := systray.AddMenuItem("Settings...", "Edit paths")
+	mSettings := systray.AddMenuItem(a.strs.MenuSettings, a.strs.MenuSettingsTip)
 	systray.AddSeparator()
-	mStart := systray.AddMenuItem("Start", "Start sing-box")
-	mStop := systray.AddMenuItem("Stop", "Stop sing-box")
-	mRestart := systray.AddMenuItem("Restart", "Restart sing-box")
-	systray.AddSeparator()
-
-	mMode := systray.AddMenuItem("Mode", "")
-	mModeOff := mMode.AddSubMenuItem("Off", "")
-	mModeProxy := mMode.AddSubMenuItem("System Proxy", "")
-	mModeTUN := mMode.AddSubMenuItem("TUN (requires admin)", "")
+	mStart := systray.AddMenuItem(a.strs.MenuStart, a.strs.MenuStartTip)
+	mStop := systray.AddMenuItem(a.strs.MenuStop, a.strs.MenuStopTip)
+	mRestart := systray.AddMenuItem(a.strs.MenuRestart, a.strs.MenuRestartTip)
 	systray.AddSeparator()
 
-	mAuto := systray.AddMenuItemCheckbox("Autostart", "Run on Windows logon", autostart.IsEnabled())
+	mMode := systray.AddMenuItem(a.strs.MenuMode, "")
+	mModeOff := mMode.AddSubMenuItem(a.strs.ModeOff, "")
+	mModeProxy := mMode.AddSubMenuItem(a.strs.ModeSystemProxy, "")
+	mModeTUN := mMode.AddSubMenuItem(a.strs.ModeTUN, "")
 	systray.AddSeparator()
 
-	mLogs := systray.AddMenuItem("View Logs", "")
+	mAuto := systray.AddMenuItemCheckbox(a.strs.MenuAutostart, a.strs.MenuAutostartTip, autostart.IsEnabled())
 	systray.AddSeparator()
 
-	mQuit := systray.AddMenuItem("Exit", "")
+	mCheckUpdate := systray.AddMenuItem(a.strs.MenuCheckUpdate, "")
+	systray.AddSeparator()
+
+	mLogs := systray.AddMenuItem(a.strs.MenuViewLogs, "")
+	systray.AddSeparator()
+
+	mQuit := systray.AddMenuItem(a.strs.MenuExit, "")
 
 	mStop.Disable()
 	mRestart.Disable()
@@ -125,16 +135,17 @@ func (a *App) OnReady() {
 	setModeChecks(mModeOff, mModeProxy, mModeTUN, mode)
 
 	a.items = menuItems{
-		settings:  mSettings,
-		start:     mStart,
-		stop:      mStop,
-		restart:   mRestart,
-		modeOff:   mModeOff,
-		modeProxy: mModeProxy,
-		modeTUN:   mModeTUN,
-		autostart: mAuto,
-		viewLogs:  mLogs,
-		quit:      mQuit,
+		settings:    mSettings,
+		start:       mStart,
+		stop:        mStop,
+		restart:     mRestart,
+		modeOff:     mModeOff,
+		modeProxy:   mModeProxy,
+		modeTUN:     mModeTUN,
+		autostart:   mAuto,
+		checkUpdate: mCheckUpdate,
+		viewLogs:    mLogs,
+		quit:        mQuit,
 	}
 
 	go a.watchState()
@@ -145,6 +156,8 @@ func (a *App) OnReady() {
 		a.log("start_on_launch=true, starting...")
 		go a.start()
 	}
+
+	go a.checkForUpdate(false)
 }
 
 func (a *App) OnExit() {
@@ -181,9 +194,9 @@ func (a *App) onCrash() {
 	a.st.Set(state.StateCrashed, mode)
 
 	n := toast.Notification{
-		AppID:   "sing-box-tray",
-		Title:   "sing-box stopped",
-		Message: "sing-box exited unexpectedly.",
+		AppID:   appTitle,
+		Title:   a.strs.ToastCrashedTitle,
+		Message: a.strs.ToastCrashedMsg,
 	}
 	_ = n.Push()
 }
@@ -311,9 +324,16 @@ func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
 		return tmpPath, nil
 
 	case state.ModeSystemProxy:
+		a.log("injecting system-proxy inbound into temp config")
+		tmpPath, err := config.InjectSystemProxy(a.cfg.ConfigPath, a.cfg.SystemProxy)
+		if err != nil {
+			return "", fmt.Errorf("inject system-proxy config: %w", err)
+		}
+		a.log("temp config written: %s", tmpPath)
+
 		tag := a.cfg.SystemProxyInbound
-		a.log("looking for http/mixed inbound (tag=%q) in %s", tag, a.cfg.ConfigPath)
-		host, port, err := config.FindInboundAddr(a.cfg.ConfigPath, tag)
+		a.log("looking for http/mixed inbound (tag=%q) in %s", tag, tmpPath)
+		host, port, err := config.FindInboundAddr(tmpPath, tag)
 		if err != nil {
 			return "", fmt.Errorf("find proxy inbound: %w", err)
 		}
@@ -322,7 +342,11 @@ func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
 			return "", fmt.Errorf("set system proxy: %w", err)
 		}
 		a.log("system proxy set to %s:%d", host, port)
-		return a.cfg.ConfigPath, nil
+
+		a.mu.Lock()
+		a.tempCfg = tmpPath
+		a.mu.Unlock()
+		return tmpPath, nil
 
 	default:
 		return a.cfg.ConfigPath, nil
@@ -369,8 +393,92 @@ func (a *App) toggleAutostart() {
 	_ = a.cfg.Save(a.exeDir)
 }
 
+// managedSingBoxRoot is the directory the updater installs sing-box versions
+// into, as managedRoot/<tag>/sing-box.exe.
+func (a *App) managedSingBoxRoot() string {
+	return filepath.Join(a.exeDir, "sing-box")
+}
+
+// checkForUpdate fetches the latest sing-box release for the configured
+// channel. When interactive is false (startup check) it only pushes a toast
+// if a different version is available — it never installs. When interactive
+// is true (manual "Check for Updates" click) it prompts the user via a
+// Yes/No dialog before downloading.
+func (a *App) checkForUpdate(interactive bool) {
+	rel, err := updater.FetchLatest(a.cfg.Update.Channel)
+	if err != nil {
+		a.log("update check failed: %s", err)
+		if interactive {
+			infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
+		}
+		return
+	}
+
+	installed := updater.InstalledVersion(a.cfg.SingBoxPath, a.managedSingBoxRoot())
+	if installed == rel.Tag {
+		a.log("sing-box up to date (%s)", rel.Tag)
+		if interactive {
+			infoBox(fmt.Sprintf(a.strs.DialogUpdateNoneFmt, rel.Tag), appTitle)
+		}
+		return
+	}
+
+	a.log("update available: %s -> %s", installed, rel.Tag)
+
+	if !interactive {
+		n := toast.Notification{
+			AppID:   appTitle,
+			Title:   a.strs.ToastUpdateTitle,
+			Message: fmt.Sprintf(a.strs.ToastUpdateMsgFmt, rel.Tag),
+		}
+		_ = n.Push()
+		return
+	}
+
+	current := installed
+	if current == "" {
+		current = a.strs.DialogVersionUnknown
+	}
+	if !msgBox(fmt.Sprintf(a.strs.DialogUpdateAvailableFmt, rel.Tag, current), appTitle) {
+		return
+	}
+	a.installUpdate(rel)
+}
+
+// installUpdate downloads rel into the managed sing-box folder, switches the
+// config to point at it, and offers to restart sing-box if it's running.
+func (a *App) installUpdate(rel *updater.Release) {
+	asset, err := rel.WindowsAmd64Asset()
+	if err != nil {
+		a.log("update failed: %s", err)
+		infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
+		return
+	}
+
+	a.log("downloading sing-box %s", rel.Tag)
+	exePath, err := updater.DownloadAndInstall(rel, asset, a.managedSingBoxRoot())
+	if err != nil {
+		a.log("update failed: %s", err)
+		infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
+		return
+	}
+
+	a.cfg.SingBoxPath = exePath
+	a.proc.SetSingBoxPath(exePath)
+	if err := a.cfg.Save(a.exeDir); err != nil {
+		a.log("save config after update: %s", err)
+	}
+	a.log("sing-box updated to %s", rel.Tag)
+
+	if a.proc.IsRunning() {
+		if msgBox(fmt.Sprintf(a.strs.DialogRestartNowFmt, rel.Tag), appTitle) {
+			go func() { a.stop(); a.start() }()
+		}
+	}
+}
+
 func (a *App) openSettings() {
-	settings.Show(a.cfg, func(updated *config.TrayConfig) {
+	settings.Show(a.cfg, a.strs, func(updated *config.TrayConfig) {
 		a.log("settings saved: sing-box=%s config=%s", updated.SingBoxPath, updated.ConfigPath)
 		a.proc.SetSingBoxPath(updated.SingBoxPath)
 		if err := updated.Save(a.exeDir); err != nil {
@@ -388,8 +496,8 @@ func (a *App) watchConfigFiles() {
 		if appState != state.StateRunning {
 			return
 		}
-		msg := fmt.Sprintf("%s changed.\nRestart sing-box to apply changes?", filepath.Base(path))
-		if msgBox(msg, "sing-box-tray") {
+		msg := fmt.Sprintf(a.strs.DialogConfigChangedFmt, filepath.Base(path))
+		if msgBox(msg, appTitle) {
 			go func() { a.stop(); a.start() }()
 		}
 	})
@@ -430,16 +538,28 @@ func (a *App) updateUI(appState state.AppState, mode state.ProxyMode) {
 	switch appState {
 	case state.StateRunning:
 		systray.SetIcon(assets.IconGreen)
-		systray.SetTooltip("sing-box is running (" + mode.String() + ")")
+		systray.SetTooltip(fmt.Sprintf(a.strs.TooltipRunningFmt, a.modeLabel(mode)))
 	case state.StateCrashed:
 		systray.SetIcon(assets.IconRed)
-		systray.SetTooltip("sing-box crashed")
+		systray.SetTooltip(a.strs.TooltipCrashed)
 	default:
 		systray.SetIcon(assets.IconGrey)
-		systray.SetTooltip("sing-box is stopped")
+		systray.SetTooltip(a.strs.TooltipStopped)
 	}
 
 	setModeChecks(a.items.modeOff, a.items.modeProxy, a.items.modeTUN, mode)
+}
+
+// modeLabel returns the localized display name for mode.
+func (a *App) modeLabel(mode state.ProxyMode) string {
+	switch mode {
+	case state.ModeSystemProxy:
+		return a.strs.ModeSystemProxy
+	case state.ModeTUN:
+		return a.strs.ModeTUN
+	default:
+		return a.strs.ModeOff
+	}
 }
 
 func (a *App) handleClicks() {
@@ -461,8 +581,10 @@ func (a *App) handleClicks() {
 			go a.switchMode(state.ModeTUN)
 		case <-a.items.autostart.ClickedCh:
 			go a.toggleAutostart()
+		case <-a.items.checkUpdate.ClickedCh:
+			go a.checkForUpdate(true)
 		case <-a.items.viewLogs.ClickedCh:
-			logwin.Show(a.logBuf, a.cfg.LogLines)
+			logwin.Show(a.logBuf, a.cfg.LogLines, a.strs)
 		case <-a.items.quit.ClickedCh:
 			systray.Quit()
 		}
@@ -495,4 +617,16 @@ func msgBox(text, title string) bool {
 		mbYesNo,
 	)
 	return int(ret) == idYes
+}
+
+// infoBox shows an OK-only informational dialog.
+func infoBox(text, title string) {
+	titlePtr, _ := windows.UTF16PtrFromString(title)
+	textPtr, _ := windows.UTF16PtrFromString(text)
+	const mbOK = 0x00
+	procMsgBox.Call(0,
+		uintptr(unsafe.Pointer(textPtr)),
+		uintptr(unsafe.Pointer(titlePtr)),
+		mbOK,
+	)
 }
