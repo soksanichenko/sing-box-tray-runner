@@ -17,6 +17,8 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
         run: ./scripts/build.sh
       - name: Create GitHub Release
         env:

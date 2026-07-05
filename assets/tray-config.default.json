@@ -14,7 +14,11 @@
     "listen_port": 2080
   },
   "update": {
-    "channel": "stable"
+    "channel": "stable",
+    "auto_update": false
+  },
+  "launcher_update": {
+    "auto_update": false
   },
   "tun": {
     "interface_name": "singbox-tun",

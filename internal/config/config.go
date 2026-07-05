@@ -15,23 +15,30 @@ import (
 const trayConfigFile = "tray-config.json"
 
 type TrayConfig struct {
-	SingBoxPath        string            `json:"sing_box_path"`
-	WintunDllPath      string            `json:"wintun_dll_path"`
-	ConfigPath         string            `json:"config_path"`
-	SystemProxyInbound string            `json:"system_proxy_inbound"`
-	Autostart          bool              `json:"autostart"`
-	StartOnLaunch      bool              `json:"start_on_launch"`
-	DefaultMode        string            `json:"default_mode"`
-	LogLines           int               `json:"log_lines"`
-	Language           string            `json:"language"`
-	SystemProxy        SystemProxyConfig `json:"system_proxy"`
-	Update             UpdateConfig      `json:"update"`
-	TUN                TUNConfig         `json:"tun"`
+	SingBoxPath        string               `json:"sing_box_path"`
+	WintunDllPath      string               `json:"wintun_dll_path"`
+	ConfigPath         string               `json:"config_path"`
+	SystemProxyInbound string               `json:"system_proxy_inbound"`
+	Autostart          bool                 `json:"autostart"`
+	StartOnLaunch      bool                 `json:"start_on_launch"`
+	DefaultMode        string               `json:"default_mode"`
+	LogLines           int                  `json:"log_lines"`
+	Language           string               `json:"language"`
+	SystemProxy        SystemProxyConfig    `json:"system_proxy"`
+	Update             UpdateConfig         `json:"update"`
+	LauncherUpdate     LauncherUpdateConfig `json:"launcher_update"`
+	TUN                TUNConfig            `json:"tun"`
 }
 
 // UpdateConfig controls the sing-box binary auto-updater.
 type UpdateConfig struct {
-	Channel string `json:"channel"` // "stable" or "alpha"
+	Channel    string `json:"channel"`     // "stable" or "alpha"
+	AutoUpdate bool   `json:"auto_update"` // silently install without prompting
+}
+
+// LauncherUpdateConfig controls the tray launcher's own self-updater.
+type LauncherUpdateConfig struct {
+	AutoUpdate bool `json:"auto_update"` // silently self-update without prompting
 }
 
 // SystemProxyConfig describes the default mixed inbound to inject into the

@@ -6,9 +6,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 OUTPUT="build/sing_box_tray_runner.exe"
 
+LDFLAGS="-H windowsgui -s -w"
+if [ -n "${VERSION:-}" ]; then
+	LDFLAGS="$LDFLAGS -X github.com/zelgray/sing-box-tray/internal/version.Version=$VERSION"
+fi
+
 mkdir -p build
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
-	-ldflags="-H windowsgui -s -w" \
+	-ldflags="$LDFLAGS" \
 	-o "$OUTPUT" \
 	.
 

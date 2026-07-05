@@ -15,6 +15,7 @@ import (
 	"github.com/zelgray/sing-box-tray/internal/config"
 	"github.com/zelgray/sing-box-tray/internal/elevation"
 	"github.com/zelgray/sing-box-tray/internal/i18n"
+	"github.com/zelgray/sing-box-tray/internal/selfupdate"
 	"github.com/zelgray/sing-box-tray/internal/state"
 	"github.com/zelgray/sing-box-tray/internal/tray"
 )
@@ -47,6 +48,7 @@ func main() {
 		os.Exit(1)
 	}
 	exeDir := filepath.Dir(exePath)
+	selfupdate.CleanupOld(exePath) // remove a leftover .old from a previous self-update, if any
 
 	cfg, err := config.Load(exeDir)
 	if err != nil {

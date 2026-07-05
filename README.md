@@ -9,14 +9,15 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   - **System Proxy** — sets Windows HTTP proxy from the sing-box config inbound
   - **TUN** — injects a TUN inbound into a temp config, requires elevation
 - Tray icon reflects state: grey = stopped, green = running, red = crashed
-- Settings window to configure paths (sing-box, wintun.dll, config.json) and the update channel
+- Settings window to configure paths (sing-box, wintun.dll, config.json), update options, and language
 - Log viewer with live updates
 - Crash detection with desktop notification
 - File watcher — prompts to restart when config files change
 - Autostart via Task Scheduler (`/RL HIGHEST` for TUN mode)
 - Single instance enforced via named kernel mutex
-- Auto-updates the `sing-box` binary itself from GitHub Releases (stable or alpha channel)
-- UI in English, Russian, or Ukrainian — auto-detected from the Windows locale
+- **Updates** tray submenu — auto-updates both the tray launcher itself and the `sing-box` binary from GitHub Releases, each with its own auto-update toggle; sing-box also has a stable/pre-release channel toggle
+- **Languages** tray submenu — switch the UI language live, no restart, in addition to auto-detecting it from the Windows locale
+- UI in English, Russian, or Ukrainian
 
 ## Build requirements
 
@@ -60,7 +61,11 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
     "listen_port": 2080
   },
   "update": {
-    "channel": "stable"
+    "channel": "stable",
+    "auto_update": false
+  },
+  "launcher_update": {
+    "auto_update": false
   },
   "tun": {
     "interface_name": "singbox-tun",
@@ -82,6 +87,8 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 | `language` | UI language: `auto` (detect from Windows), `en`, `ru`, or `ua`. |
 | `system_proxy.*` | Default `mixed` inbound injected when running in System Proxy mode and the base `config.json` has none. |
 | `update.channel` | `stable` or `alpha` — which sing-box releases the updater considers. |
+| `update.auto_update` | If `true`, sing-box updates install (and restart sing-box if running) automatically, no prompt. |
+| `launcher_update.auto_update` | If `true`, tray launcher updates install and relaunch the app automatically, no prompt. |
 | `tun.*` | TUN interface settings injected at runtime. The base `config.json` does not need a TUN section. |
 
 ### System Proxy mode
@@ -94,13 +101,18 @@ The tray injects a `tun` inbound and a `route.auto_detect_interface: true` setti
 
 The tray also prepends a route rule that sends sing-box's own process traffic via `direct`, preventing it from being re-captured by the TUN interface.
 
-### Auto-update
+### Updates
 
-The tray checks GitHub for a new sing-box release on startup (a toast notification appears if one is available) and via **Check for Updates** in the tray menu at any time. Updates are downloaded into a tray-managed `sing-box/<version>/` folder next to the executable; `sing_box_path` is switched to point at the new version automatically, and older versions are removed. `update.channel` (or the checkbox in Settings) picks between `stable` releases and `alpha` pre-releases.
+The tray menu has an **Updates** submenu with two independent sections, both fetching releases straight from GitHub — no separate updater app:
+
+- **sing-box-tray** (the tray launcher itself) — **Check for Updates** downloads the latest release of this project, swaps it into place, and relaunches. **Auto-update** (checkbox, also in Settings) skips the confirmation prompt on startup and does this silently — if sing-box happens to be running, it's stopped first (otherwise it would be orphaned once the old tray process exits) and not restarted automatically after the relaunch.
+- **sing-box** — same idea as before: **Check for Updates**, plus **Auto-update** and **Use pre-release versions** checkboxes (also duplicated in Settings). Updates install into a tray-managed `sing-box/<version>/` folder next to the executable; `sing_box_path` is switched to point at the new version automatically, and older versions are removed. With auto-update on, a running sing-box is restarted automatically after an update; with it off, the tray only toasts that an update is available and installs on the next manual "Check for Updates" click.
+
+Both sections check once on startup (toast-only unless auto-update is on) and on demand via their "Check for Updates" item.
 
 ### Localization
 
-The UI (tray menu, dialogs, notifications, Settings/Log windows) is available in English, Russian, and Ukrainian. `language: "auto"` detects the language from the Windows UI locale; set it to `en`, `ru`, or `ua` in `tray-config.json` to override. Log output stays in English regardless of UI language.
+The UI (tray menu, dialogs, notifications, Settings/Log windows) is available in English, Russian, and Ukrainian. `language: "auto"` detects the language from the Windows UI locale. Switch it live — no restart — via the tray's **Languages** submenu or the language dropdown in Settings; both write the choice back to `tray-config.json`. Log output stays in English regardless of UI language.
 
 ## Building
 
@@ -122,7 +134,7 @@ rsrc -manifest app.manifest -o rsrc.syso
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`) — on every push/PR: `golangci-lint` (with `GOOS=windows`) plus a build matrix on `ubuntu-latest` and `windows-latest` to verify both `scripts/build.sh` and `scripts/build.ps1` work.
-- **Release** (`.github/workflows/release.yml`) — pushing a `v*` tag (e.g. `git tag v1.0.0 && git push --tags`) builds the exe and publishes it as a GitHub Release with auto-generated notes.
+- **Release** (`.github/workflows/release.yml`) — pushing a `v*` tag (e.g. `git tag v1.0.0 && git push --tags`) builds the exe (with the tag embedded as its version, so the launcher's own self-updater can detect it) and publishes it as a GitHub Release with auto-generated notes.
 - **Dependabot** (`.github/dependabot.yml`) — weekly PRs for Go module and GitHub Actions updates.
 
 ## License

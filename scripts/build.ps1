@@ -11,6 +11,11 @@ $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $env:CGO_ENABLED = "0"
 
-go build -ldflags="-H windowsgui -s -w" -o $Output .
+$LdFlags = "-H windowsgui -s -w"
+if ($env:VERSION) {
+	$LdFlags += " -X github.com/zelgray/sing-box-tray/internal/version.Version=$env:VERSION"
+}
+
+go build -ldflags="$LdFlags" -o $Output .
 
 Write-Host "Built: $Output"

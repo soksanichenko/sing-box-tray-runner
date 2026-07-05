@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	repoOwner  = "SagerNet"
-	repoName   = "sing-box"
 	apiBaseURL = "https://api.github.com"
 	userAgent  = "sing-box-tray"
 )
@@ -45,11 +43,11 @@ type ghAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// FetchLatest returns the latest sing-box release for channel ("stable" or
-// "alpha"). "stable" picks the newest non-draft, non-prerelease release;
+// FetchLatest returns the latest release of owner/repo for channel ("stable"
+// or "alpha"). "stable" picks the newest non-draft, non-prerelease release;
 // "alpha" picks the newest non-draft release regardless of prerelease status.
-func FetchLatest(channel string) (*Release, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=10", apiBaseURL, repoOwner, repoName)
+func FetchLatest(owner, repo, channel string) (*Release, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/releases?per_page=10", apiBaseURL, owner, repo)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
@@ -99,6 +97,16 @@ func (r *Release) WindowsAmd64Asset() (*Asset, error) {
 	return nil, fmt.Errorf("no windows-amd64 asset found in release %s", r.Tag)
 }
 
+// AssetNamed returns the release asset with the exact given name.
+func (r *Release) AssetNamed(name string) (*Asset, error) {
+	for _, a := range r.Assets {
+		if a.Name == name {
+			return &a, nil
+		}
+	}
+	return nil, fmt.Errorf("no asset named %q found in release %s", name, r.Tag)
+}
+
 // DownloadAndInstall downloads asset's zip, extracts it into
 // managedRoot/<rel.Tag>/, removes sibling version directories, and returns
 // the path to the extracted sing-box.exe.
@@ -125,23 +133,32 @@ func DownloadAndInstall(rel *Release, asset *Asset, managedRoot string) (string,
 	return exePath, nil
 }
 
-func download(url string) (string, error) {
+func httpGetAsset(url string) (io.ReadCloser, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("build download request: %w", err)
+		return nil, fmt.Errorf("build download request: %w", err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("download asset: %w", err)
+		return nil, fmt.Errorf("download asset: %w", err)
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download asset: unexpected status %s", resp.Status)
+		resp.Body.Close()
+		return nil, fmt.Errorf("download asset: unexpected status %s", resp.Status)
 	}
+	return resp.Body, nil
+}
+
+// download fetches url into a new temp file and returns its path.
+func download(url string) (string, error) {
+	body, err := httpGetAsset(url)
+	if err != nil {
+		return "", err
+	}
+	defer body.Close()
 
 	tmp, err := os.CreateTemp("", "sing-box-*.zip")
 	if err != nil {
@@ -149,11 +166,33 @@ func download(url string) (string, error) {
 	}
 	defer tmp.Close()
 
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
+	if _, err := io.Copy(tmp, body); err != nil {
 		os.Remove(tmp.Name())
 		return "", fmt.Errorf("write downloaded asset: %w", err)
 	}
 	return tmp.Name(), nil
+}
+
+// DownloadFile fetches url and writes it to destPath, overwriting any
+// existing file there.
+func DownloadFile(url, destPath string) error {
+	body, err := httpGetAsset(url)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+
+	out, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", destPath, err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, body); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("write %s: %w", destPath, err)
+	}
+	return nil
 }
 
 // extractZip extracts a sing-box release zip into destDir, stripping the

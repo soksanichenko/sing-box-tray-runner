@@ -38,7 +38,9 @@ type Strings struct {
 	ModeTUN          string `json:"mode_tun"`
 	MenuAutostart    string `json:"menu_autostart"`
 	MenuAutostartTip string `json:"menu_autostart_tip"`
+	MenuUpdates      string `json:"menu_updates"`
 	MenuCheckUpdate  string `json:"menu_check_update"`
+	MenuAutoUpdate   string `json:"menu_auto_update"`
 	MenuViewLogs     string `json:"menu_view_logs"`
 	MenuExit         string `json:"menu_exit"`
 
@@ -58,14 +60,17 @@ type Strings struct {
 	DialogErrorFmt           string `json:"dialog_error_fmt"`
 	DialogVersionUnknown     string `json:"dialog_version_unknown"`
 
-	SettingsTitle        string `json:"settings_title"`
-	SettingsSingBoxPath  string `json:"settings_sing_box_path"`
-	SettingsWintunPath   string `json:"settings_wintun_path"`
-	SettingsConfigPath   string `json:"settings_config_path"`
-	SettingsBrowse       string `json:"settings_browse"`
-	SettingsAlphaChannel string `json:"settings_alpha_channel"`
-	SettingsSave         string `json:"settings_save"`
-	SettingsCancel       string `json:"settings_cancel"`
+	SettingsTitle              string `json:"settings_title"`
+	SettingsSingBoxPath        string `json:"settings_sing_box_path"`
+	SettingsWintunPath         string `json:"settings_wintun_path"`
+	SettingsConfigPath         string `json:"settings_config_path"`
+	SettingsBrowse             string `json:"settings_browse"`
+	SettingsAutoUpdateLauncher string `json:"settings_auto_update_launcher"`
+	SettingsAutoUpdateSingBox  string `json:"settings_auto_update_singbox"`
+	UsePrereleaseLabel         string `json:"use_prerelease_label"`
+	SettingsLanguageLabel      string `json:"settings_language_label"`
+	SettingsSave               string `json:"settings_save"`
+	SettingsCancel             string `json:"settings_cancel"`
 
 	LogWindowTitle string `json:"log_window_title"`
 

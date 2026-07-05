@@ -19,6 +19,23 @@ var (
 	mw *walk.MainWindow
 )
 
+// langLabels/langCodes are parallel: the ComboBox shows each language in its
+// own script (not translated via Strings — this is the control that picks
+// the language), langCodes[i] is the tray-config.json value to store.
+var (
+	langLabels = []string{"Auto", "English", "Русский", "Українська"}
+	langCodes  = []string{"auto", "en", "ru", "ua"}
+)
+
+func langIndex(code string) int {
+	for i, c := range langCodes {
+		if c == code {
+			return i
+		}
+	}
+	return 0 // "auto"
+}
+
 // Show opens the settings window, or brings it to front if already open.
 // onSave is called with the updated config when the user clicks Save.
 func Show(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayConfig)) {
@@ -42,7 +59,8 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 
 	var w *walk.MainWindow
 	var singBoxEdit, wintunEdit, configEdit *walk.LineEdit
-	var alphaCheck *walk.CheckBox
+	var launcherAutoCheck, singBoxAutoCheck, prereleaseCheck *walk.CheckBox
+	var langCombo *walk.ComboBox
 
 	browseFn := func(edit **walk.LineEdit, filter string) func() {
 		return func() {
@@ -59,8 +77,8 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.SettingsTitle,
-		MinSize:  Size{Width: 550, Height: 215},
-		MaxSize:  Size{Width: 900, Height: 215},
+		MinSize:  Size{Width: 550, Height: 310},
+		MaxSize:  Size{Width: 900, Height: 310},
 		Layout:   Grid{Columns: 3, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 6},
 		Children: []Widget{
 			Label{Text: strs.SettingsSingBoxPath},
@@ -75,7 +93,12 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 			LineEdit{AssignTo: &configEdit, Text: cfg.ConfigPath},
 			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&configEdit, "JSON files (*.json)|*.json|All files (*.*)|*.*")},
 
-			CheckBox{AssignTo: &alphaCheck, Text: strs.SettingsAlphaChannel, ColumnSpan: 3, Checked: cfg.Update.Channel == "alpha"},
+			CheckBox{AssignTo: &launcherAutoCheck, Text: strs.SettingsAutoUpdateLauncher, ColumnSpan: 3, Checked: cfg.LauncherUpdate.AutoUpdate},
+			CheckBox{AssignTo: &singBoxAutoCheck, Text: strs.SettingsAutoUpdateSingBox, ColumnSpan: 3, Checked: cfg.Update.AutoUpdate},
+			CheckBox{AssignTo: &prereleaseCheck, Text: strs.UsePrereleaseLabel, ColumnSpan: 3, Checked: cfg.Update.Channel == "alpha"},
+
+			Label{Text: strs.SettingsLanguageLabel},
+			ComboBox{AssignTo: &langCombo, Model: langLabels, CurrentIndex: langIndex(cfg.Language), ColumnSpan: 2},
 
 			HSpacer{ColumnSpan: 2},
 			Composite{
@@ -85,11 +108,14 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 						cfg.SingBoxPath = singBoxEdit.Text()
 						cfg.WintunDllPath = wintunEdit.Text()
 						cfg.ConfigPath = configEdit.Text()
-						if alphaCheck.Checked() {
+						cfg.LauncherUpdate.AutoUpdate = launcherAutoCheck.Checked()
+						cfg.Update.AutoUpdate = singBoxAutoCheck.Checked()
+						if prereleaseCheck.Checked() {
 							cfg.Update.Channel = "alpha"
 						} else {
 							cfg.Update.Channel = "stable"
 						}
+						cfg.Language = langCodes[langCombo.CurrentIndex()]
 						onSave(cfg)
 						w.Close()
 					}},
