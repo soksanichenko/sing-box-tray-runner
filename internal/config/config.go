@@ -85,6 +85,18 @@ func Load(exeDir string) (*TrayConfig, error) {
 	if cfg.Update.Channel == "" {
 		cfg.Update.Channel = "stable"
 	}
+	if cfg.ConfigDir == "" && cfg.SelectedConfig == "" {
+		// Migrate the pre-multi-config "config_path" field (a single file
+		// path) so existing installs keep pointing at their real config
+		// instead of falling back to the exe directory.
+		var legacy struct {
+			ConfigPath string `json:"config_path"`
+		}
+		if err := json.Unmarshal(data, &legacy); err == nil && legacy.ConfigPath != "" {
+			cfg.ConfigDir = filepath.Dir(legacy.ConfigPath)
+			cfg.SelectedConfig = filepath.Base(legacy.ConfigPath)
+		}
+	}
 	if cfg.ConfigDir == "" {
 		cfg.ConfigDir = "."
 	}

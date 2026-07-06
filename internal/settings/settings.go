@@ -56,11 +56,17 @@ func Show(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSav
 	go runWindow(cfg, strs, configNames, onSave)
 }
 
+// configIndex returns the index of selected within names, falling back to 0
+// if not found — or -1 for an empty list, since walk's ComboBox.SetCurrentIndex
+// errors (and aborts window creation) if given index 0 on a model with no items.
 func configIndex(names []string, selected string) int {
 	for i, n := range names {
 		if n == selected {
 			return i
 		}
+	}
+	if len(names) == 0 {
+		return -1
 	}
 	return 0
 }
