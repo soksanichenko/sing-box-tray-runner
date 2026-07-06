@@ -160,25 +160,7 @@ func (a *App) OnReady() {
 	systray.AddSeparator()
 
 	mConfig := systray.AddMenuItem(a.strs.MenuConfig, "")
-	configNames, err := config.ListConfigFiles(a.cfg.ConfigDir)
-	if err != nil {
-		a.log("list config files: %s", err)
-	}
-	configItems := make([]*systray.MenuItem, len(configNames))
-	for i, name := range configNames {
-		item := mConfig.AddSubMenuItemCheckbox(name, "", name == a.cfg.SelectedConfig)
-		configItems[i] = item
-		// Dynamic in count, so each gets its own click loop instead of a case
-		// in the fixed select in handleClicks.
-		go func(name string, item *systray.MenuItem) {
-			for range item.ClickedCh {
-				go a.switchConfig(name)
-			}
-		}(name, item)
-	}
-	if len(configNames) == 0 {
-		mConfig.Disable()
-	}
+	configItems, configNames := a.buildConfigItems(mConfig, a.cfg.ConfigDir)
 	systray.AddSeparator()
 
 	mUpdates := systray.AddMenuItem(a.strs.MenuUpdates, "")
@@ -441,6 +423,58 @@ func (a *App) switchConfig(name string) {
 	if wasRunning {
 		a.start()
 	}
+}
+
+// buildConfigItems scans dir and adds one checkable submenu item per config
+// file found under parent, each wired to switchConfig via its own click loop
+// (the item count is dynamic, so it can't be folded into the fixed select in
+// handleClicks like every other submenu). Enables or disables parent
+// depending on whether anything was found, and logs the scan so a folder
+// that unexpectedly yields zero files is diagnosable from the log instead of
+// just showing up as a disabled menu.
+func (a *App) buildConfigItems(parent *systray.MenuItem, dir string) (items []*systray.MenuItem, names []string) {
+	names, err := config.ListConfigFiles(dir)
+	if err != nil {
+		a.log("list config files (%s): %s", dir, err)
+	}
+	a.log("config dir %s: found %d config file(s): %v", dir, len(names), names)
+
+	items = make([]*systray.MenuItem, len(names))
+	for i, name := range names {
+		item := parent.AddSubMenuItemCheckbox(name, "", name == a.cfg.SelectedConfig)
+		items[i] = item
+		go func(name string, item *systray.MenuItem) {
+			for range item.ClickedCh {
+				go a.switchConfig(name)
+			}
+		}(name, item)
+	}
+	if len(names) == 0 {
+		parent.Disable()
+	} else {
+		parent.Enable()
+	}
+	return items, names
+}
+
+// rebuildConfigMenu re-scans dir (called when Settings changes ConfigDir)
+// and replaces the Config submenu's items. getlantern/systray has no API to
+// remove a menu item, so the old ones are just hidden rather than reused.
+func (a *App) rebuildConfigMenu(dir string) {
+	a.mu.Lock()
+	oldItems := a.items.configItems
+	a.mu.Unlock()
+
+	for _, item := range oldItems {
+		item.Hide()
+	}
+
+	items, names := a.buildConfigItems(a.items.config, dir)
+
+	a.mu.Lock()
+	a.items.configItems = items
+	a.items.configNames = names
+	a.mu.Unlock()
 }
 
 func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
@@ -797,6 +831,7 @@ func (a *App) toggleSingBoxPrerelease() {
 	checkOrUncheck(a.items.singBoxPrerelease, a.cfg.Update.Channel == "alpha")
 	_ = a.cfg.Save(a.exeDir)
 	a.log("sing-box update channel: %s", a.cfg.Update.Channel)
+	a.checkSingBoxUpdate(true)
 }
 
 // applyLanguage recomputes a.strs for langCode, retitles the menu, and
@@ -854,7 +889,9 @@ func (a *App) refreshMenuTexts() {
 
 func (a *App) openSettings() {
 	prevLang := a.cfg.Language
+	prevConfigDir := a.cfg.ConfigDir
 	prevSelectedConfig := a.cfg.SelectedConfig
+	prevChannel := a.cfg.Update.Channel
 	settings.Show(a.cfg, a.strs, a.items.configNames, func(updated *config.TrayConfig) {
 		a.log("settings saved: sing-box=%s config=%s", updated.SingBoxPath, updated.ActiveConfigPath())
 		a.proc.SetSingBoxPath(updated.SingBoxPath)
@@ -864,9 +901,13 @@ func (a *App) openSettings() {
 		if updated.Language != prevLang {
 			a.applyLanguage(updated.Language)
 		}
-		if updated.SelectedConfig != prevSelectedConfig {
-			// Settings only lets picking among the config directory scanned at
-			// startup, so the known names list still matches.
+		switch {
+		case updated.ConfigDir != prevConfigDir:
+			// The folder itself changed, so the submenu's items no longer
+			// match what's on disk — rescan and rebuild it.
+			a.rebuildConfigMenu(updated.ConfigDir)
+			a.restartConfigWatcher()
+		case updated.SelectedConfig != prevSelectedConfig:
 			setConfigChecks(a.items.configItems, a.items.configNames, updated.SelectedConfig)
 			a.restartConfigWatcher()
 		}
@@ -874,6 +915,9 @@ func (a *App) openSettings() {
 		checkOrUncheck(a.items.launcherAutoUpdate, updated.LauncherUpdate.AutoUpdate)
 		checkOrUncheck(a.items.singBoxAutoUpdate, updated.Update.AutoUpdate)
 		checkOrUncheck(a.items.singBoxPrerelease, updated.Update.Channel == "alpha")
+		if updated.Update.Channel != prevChannel {
+			go a.checkSingBoxUpdate(true)
+		}
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/zelgray/sing-box-tray/assets"
 )
@@ -131,7 +132,7 @@ func ListConfigFiles(dir string) ([]string, error) {
 			continue
 		}
 		name := e.Name()
-		if name == trayConfigFile || filepath.Ext(name) != ".json" {
+		if strings.EqualFold(name, trayConfigFile) || !strings.EqualFold(filepath.Ext(name), ".json") {
 			continue
 		}
 		names = append(names, name)
