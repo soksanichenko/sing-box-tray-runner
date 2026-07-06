@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/zelgray/sing-box-tray/assets"
 )
@@ -17,7 +18,8 @@ const trayConfigFile = "tray-config.json"
 type TrayConfig struct {
 	SingBoxPath        string               `json:"sing_box_path"`
 	WintunDllPath      string               `json:"wintun_dll_path"`
-	ConfigPath         string               `json:"config_path"`
+	ConfigDir          string               `json:"config_dir"`
+	SelectedConfig     string               `json:"selected_config"`
 	SystemProxyInbound string               `json:"system_proxy_inbound"`
 	Autostart          bool                 `json:"autostart"`
 	StartOnLaunch      bool                 `json:"start_on_launch"`
@@ -83,12 +85,47 @@ func Load(exeDir string) (*TrayConfig, error) {
 	if cfg.Update.Channel == "" {
 		cfg.Update.Channel = "stable"
 	}
+	if cfg.ConfigDir == "" {
+		cfg.ConfigDir = "."
+	}
+	if cfg.SelectedConfig == "" {
+		cfg.SelectedConfig = "config.json"
+	}
 	// Resolve relative paths against the exe directory so exec.Command
 	// receives an absolute path (required since Go 1.19).
 	cfg.SingBoxPath = absPath(exeDir, cfg.SingBoxPath)
 	cfg.WintunDllPath = absPath(exeDir, cfg.WintunDllPath)
-	cfg.ConfigPath = absPath(exeDir, cfg.ConfigPath)
+	cfg.ConfigDir = absPath(exeDir, cfg.ConfigDir)
 	return &cfg, nil
+}
+
+// ActiveConfigPath returns the full path to the currently selected sing-box
+// config file inside ConfigDir.
+func (c *TrayConfig) ActiveConfigPath() string {
+	return filepath.Join(c.ConfigDir, c.SelectedConfig)
+}
+
+// ListConfigFiles returns the base names of every *.json file directly inside
+// dir (non-recursive), sorted alphabetically. tray-config.json is excluded
+// since it can live in the same directory but isn't a sing-box config.
+func ListConfigFiles(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read config dir: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if name == trayConfigFile || filepath.Ext(name) != ".json" {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // absPath returns p as-is if it is already absolute, otherwise joins it

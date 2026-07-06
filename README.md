@@ -9,13 +9,15 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   - **System Proxy** — sets Windows HTTP proxy from the sing-box config inbound
   - **TUN** — injects a TUN inbound into a temp config, requires elevation
 - Tray icon reflects state: grey = stopped, green = running, red = crashed
-- Settings window to configure paths (sing-box, wintun.dll, config.json), update options, and language
+- **Config** tray submenu — switch which sing-box config file is active, picked from a folder that can hold several (also duplicated in Settings)
+- Settings window to configure paths (sing-box, wintun.dll), the config folder/active config, update options, and language
 - Log viewer with live updates
 - Crash detection with desktop notification
 - File watcher — prompts to restart when config files change
 - Autostart via Task Scheduler (`/RL HIGHEST` for TUN mode)
 - Single instance enforced via named kernel mutex
 - **Updates** tray submenu — auto-updates both the tray launcher itself and the `sing-box` binary from GitHub Releases, each with its own auto-update toggle; sing-box also has a stable/pre-release channel toggle
+- First-run check — offers to download `sing-box.exe` and `wintun.dll` on startup if either is missing at its configured path
 - **Languages** tray submenu — switch the UI language live, no restart, in addition to auto-detecting it from the Windows locale
 - UI in English, Russian, or Ukrainian
 
@@ -32,9 +34,9 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 ## Runtime requirements
 
 - Windows 10/11 x64
-- [sing-box](https://github.com/SagerNet/sing-box) binary
-- [wintun.dll](https://www.wintun.net/) — required only for TUN mode
-- Internet access to `api.github.com`/`github.com` — required only for the **Updates** feature (checking for and downloading sing-box or tray launcher updates); everything else works fully offline
+- [sing-box](https://github.com/SagerNet/sing-box) binary — auto-downloadable on first run if missing
+- [wintun.dll](https://www.wintun.net/) — required only for TUN mode; auto-downloadable on first run if missing
+- Internet access to `api.github.com`/`github.com` — required for the **Updates** feature and the first-run sing-box download; `www.wintun.net` is required for the first-run wintun.dll download. Everything else works fully offline
 
 ## Installation
 
@@ -50,7 +52,8 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 {
   "sing_box_path": "sing-box.exe",
   "wintun_dll_path": "wintun.dll",
-  "config_path": "config.json",
+  "config_dir": ".",
+  "selected_config": "config.json",
   "system_proxy_inbound": "",
   "autostart": false,
   "default_mode": "system_proxy",
@@ -81,7 +84,8 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 |---|---|
 | `sing_box_path` | Path to `sing-box.exe`. Relative paths are resolved from the tray exe directory. Rewritten automatically after an auto-update. |
 | `wintun_dll_path` | Path to `wintun.dll`. Copied next to `sing-box.exe` on TUN start if not already present. |
-| `config_path` | Path to the sing-box `config.json`. This file is never modified. |
+| `config_dir` | Folder scanned (non-recursively) for `*.json` sing-box configs; the tray's **Config** submenu and the Settings config dropdown both list what's found here. |
+| `selected_config` | File name (inside `config_dir`) of the currently active sing-box config. This file is never modified. |
 | `system_proxy_inbound` | Tag of the `http` or `mixed` inbound to read the proxy address from. Leave empty to use the first one found. |
 | `autostart` | Kept in sync with the tray's "Autostart" checkbox (whether the Task Scheduler entry exists); not meant to be hand-edited. |
 | `default_mode` | Starting mode: `off`, `system_proxy`, or `tun`. |
@@ -93,6 +97,10 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 | `update.auto_update` | If `true`, sing-box updates install (and restart sing-box if running) automatically, no prompt. |
 | `launcher_update.auto_update` | If `true`, tray launcher updates install and relaunch the app automatically, no prompt. |
 | `tun.*` | TUN interface settings injected at runtime. The base `config.json` does not need a TUN section. |
+
+### Config
+
+`config_dir` can hold several sing-box config files side by side. The tray's **Config** submenu lists every `*.json` file found there (scanned once at startup) and lets you pick which one is active; picking a different one restarts sing-box live if it's running. The same list is duplicated as a dropdown in Settings. Adding or removing files in `config_dir` while the tray is running won't be picked up until restart.
 
 ### System Proxy mode
 

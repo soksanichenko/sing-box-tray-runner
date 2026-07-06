@@ -71,6 +71,10 @@ type menuItems struct {
 	modeProxy *systray.MenuItem
 	modeTUN   *systray.MenuItem
 
+	config      *systray.MenuItem
+	configItems []*systray.MenuItem
+	configNames []string
+
 	updates             *systray.MenuItem
 	launcherCheckUpdate *systray.MenuItem
 	launcherAutoUpdate  *systray.MenuItem
@@ -99,10 +103,11 @@ type App struct {
 	releaseMutex func()
 	strs         i18n.Strings
 
-	mu           sync.Mutex
-	items        menuItems
-	tempCfg      string
-	pendingStart bool
+	mu            sync.Mutex
+	items         menuItems
+	tempCfg       string
+	pendingStart  bool
+	configWatcher *watcher.Watcher
 }
 
 func NewApp(cfg *config.TrayConfig, exeDir string, initialMode state.ProxyMode, releaseMutex func(), strs i18n.Strings) *App {
@@ -126,7 +131,7 @@ func NewApp(cfg *config.TrayConfig, exeDir string, initialMode state.ProxyMode, 
 	a.log("--- sing-box-tray started ---")
 	a.log("exe dir:      %s", exeDir)
 	a.log("sing-box:     %s", cfg.SingBoxPath)
-	a.log("config:       %s", cfg.ConfigPath)
+	a.log("config:       %s", cfg.ActiveConfigPath())
 	a.log("default mode: %s", cfg.DefaultMode)
 	a.log("initial mode: %s", initialMode)
 
@@ -152,6 +157,28 @@ func (a *App) OnReady() {
 	mModeOff := mMode.AddSubMenuItem(a.strs.ModeOff, "")
 	mModeProxy := mMode.AddSubMenuItem(a.strs.ModeSystemProxy, "")
 	mModeTUN := mMode.AddSubMenuItem(a.strs.ModeTUN, "")
+	systray.AddSeparator()
+
+	mConfig := systray.AddMenuItem(a.strs.MenuConfig, "")
+	configNames, err := config.ListConfigFiles(a.cfg.ConfigDir)
+	if err != nil {
+		a.log("list config files: %s", err)
+	}
+	configItems := make([]*systray.MenuItem, len(configNames))
+	for i, name := range configNames {
+		item := mConfig.AddSubMenuItemCheckbox(name, "", name == a.cfg.SelectedConfig)
+		configItems[i] = item
+		// Dynamic in count, so each gets its own click loop instead of a case
+		// in the fixed select in handleClicks.
+		go func(name string, item *systray.MenuItem) {
+			for range item.ClickedCh {
+				go a.switchConfig(name)
+			}
+		}(name, item)
+	}
+	if len(configNames) == 0 {
+		mConfig.Disable()
+	}
 	systray.AddSeparator()
 
 	mUpdates := systray.AddMenuItem(a.strs.MenuUpdates, "")
@@ -196,6 +223,10 @@ func (a *App) OnReady() {
 		modeProxy: mModeProxy,
 		modeTUN:   mModeTUN,
 
+		config:      mConfig,
+		configItems: configItems,
+		configNames: configNames,
+
 		updates:             mUpdates,
 		launcherCheckUpdate: mLauncherCheck,
 		launcherAutoUpdate:  mLauncherAuto,
@@ -215,12 +246,15 @@ func (a *App) OnReady() {
 
 	go a.watchState()
 	go a.handleClicks()
-	go a.watchConfigFiles()
+	a.restartConfigWatcher()
 
-	if a.cfg.StartOnLaunch {
-		a.log("start_on_launch=true, starting...")
-		go a.start()
-	}
+	go func() {
+		a.checkFirstRunDeps()
+		if a.cfg.StartOnLaunch {
+			a.log("start_on_launch=true, starting...")
+			a.start()
+		}
+	}()
 
 	go a.checkSingBoxUpdate(false)
 	go a.checkLauncherUpdate(false)
@@ -371,11 +405,49 @@ func (a *App) switchMode(newMode state.ProxyMode) {
 	}
 }
 
+// switchConfig applies a newly picked sing-box config file from the tray's
+// Config submenu: persists the choice, restarts file-change watching to
+// track the new file, and — mirroring switchMode — stops and restarts
+// sing-box live if it's currently running.
+func (a *App) switchConfig(name string) {
+	a.mu.Lock()
+	if a.cfg.SelectedConfig == name {
+		a.mu.Unlock()
+		return
+	}
+	appState, mode := a.st.Get()
+	wasRunning := appState == state.StateRunning
+	a.mu.Unlock()
+
+	a.log("switching config: %s -> %s", a.cfg.SelectedConfig, name)
+
+	if wasRunning {
+		a.mu.Lock()
+		a.st.Set(state.StateStopping, mode)
+		a.mu.Unlock()
+		a.proc.Stop(5 * time.Second)
+		a.cleanup(mode)
+	}
+
+	a.cfg.SelectedConfig = name
+	if err := a.cfg.Save(a.exeDir); err != nil {
+		a.log("save config after config switch: %s", err)
+	}
+	setConfigChecks(a.items.configItems, a.items.configNames, name)
+	a.restartConfigWatcher()
+
+	a.st.Set(state.StateStopped, mode)
+
+	if wasRunning {
+		a.start()
+	}
+}
+
 func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
 	switch mode {
 	case state.ModeTUN:
 		a.log("injecting TUN inbound into temp config")
-		tmpPath, err := tun.InjectTUN(a.cfg.ConfigPath, a.cfg.TUN, a.cfg.SingBoxPath)
+		tmpPath, err := tun.InjectTUN(a.cfg.ActiveConfigPath(), a.cfg.TUN, a.cfg.SingBoxPath)
 		if err != nil {
 			return "", fmt.Errorf("inject TUN config: %w", err)
 		}
@@ -391,7 +463,7 @@ func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
 
 	case state.ModeSystemProxy:
 		a.log("injecting system-proxy inbound into temp config")
-		tmpPath, err := config.InjectSystemProxy(a.cfg.ConfigPath, a.cfg.SystemProxy)
+		tmpPath, err := config.InjectSystemProxy(a.cfg.ActiveConfigPath(), a.cfg.SystemProxy)
 		if err != nil {
 			return "", fmt.Errorf("inject system-proxy config: %w", err)
 		}
@@ -415,7 +487,7 @@ func (a *App) prepareConfig(mode state.ProxyMode) (string, error) {
 		return tmpPath, nil
 
 	default:
-		return a.cfg.ConfigPath, nil
+		return a.cfg.ActiveConfigPath(), nil
 	}
 }
 
@@ -463,6 +535,51 @@ func (a *App) toggleAutostart() {
 // into, as managedRoot/<tag>/sing-box.exe.
 func (a *App) managedSingBoxRoot() string {
 	return filepath.Join(a.exeDir, "sing-box")
+}
+
+// checkFirstRunDeps checks whether sing-box.exe and wintun.dll exist at their
+// configured paths and offers to download whichever is missing. Runs on every
+// startup, but is only ever actionable on a fresh install (or if the user
+// deleted one of the files) since both checks are no-ops once the files exist.
+func (a *App) checkFirstRunDeps() {
+	if _, err := os.Stat(a.cfg.SingBoxPath); os.IsNotExist(err) {
+		a.offerSingBoxDownload()
+	}
+	if a.cfg.WintunDllPath != "" {
+		if _, err := os.Stat(a.cfg.WintunDllPath); os.IsNotExist(err) {
+			a.offerWintunDownload()
+		}
+	}
+}
+
+// offerSingBoxDownload prompts the user and, if accepted, fetches and
+// installs the latest sing-box release via the same path the updater uses.
+func (a *App) offerSingBoxDownload() {
+	if !msgBox(fmt.Sprintf(a.strs.DialogMissingSingBoxFmt, a.cfg.SingBoxPath), appTitle) {
+		return
+	}
+	rel, err := updater.FetchLatest(singBoxOwner, singBoxRepo, a.cfg.Update.Channel)
+	if err != nil {
+		a.log("sing-box download failed: %s", err)
+		infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
+		return
+	}
+	a.installSingBoxUpdate(rel, true)
+}
+
+// offerWintunDownload prompts the user and, if accepted, downloads
+// wintun.dll from wintun.net straight to a.cfg.WintunDllPath.
+func (a *App) offerWintunDownload() {
+	if !msgBox(fmt.Sprintf(a.strs.DialogMissingWintunFmt, a.cfg.WintunDllPath), appTitle) {
+		return
+	}
+	a.log("downloading wintun.dll")
+	if err := updater.DownloadWintunDll(a.cfg.WintunDllPath); err != nil {
+		a.log("wintun.dll download failed: %s", err)
+		infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
+		return
+	}
+	a.log("wintun.dll downloaded to %s", a.cfg.WintunDllPath)
 }
 
 // checkSingBoxUpdate fetches the latest sing-box release for the configured
@@ -722,6 +839,7 @@ func (a *App) refreshMenuTexts() {
 	a.items.modeOff.SetTitle(a.strs.ModeOff)
 	a.items.modeProxy.SetTitle(a.strs.ModeSystemProxy)
 	a.items.modeTUN.SetTitle(a.strs.ModeTUN)
+	a.items.config.SetTitle(a.strs.MenuConfig)
 	a.items.updates.SetTitle(a.strs.MenuUpdates)
 	a.items.launcherCheckUpdate.SetTitle(a.strs.MenuCheckUpdate)
 	a.items.launcherAutoUpdate.SetTitle(a.strs.MenuAutoUpdate)
@@ -736,14 +854,21 @@ func (a *App) refreshMenuTexts() {
 
 func (a *App) openSettings() {
 	prevLang := a.cfg.Language
-	settings.Show(a.cfg, a.strs, func(updated *config.TrayConfig) {
-		a.log("settings saved: sing-box=%s config=%s", updated.SingBoxPath, updated.ConfigPath)
+	prevSelectedConfig := a.cfg.SelectedConfig
+	settings.Show(a.cfg, a.strs, a.items.configNames, func(updated *config.TrayConfig) {
+		a.log("settings saved: sing-box=%s config=%s", updated.SingBoxPath, updated.ActiveConfigPath())
 		a.proc.SetSingBoxPath(updated.SingBoxPath)
 		if err := updated.Save(a.exeDir); err != nil {
 			a.log("save settings: %s", err)
 		}
 		if updated.Language != prevLang {
 			a.applyLanguage(updated.Language)
+		}
+		if updated.SelectedConfig != prevSelectedConfig {
+			// Settings only lets picking among the config directory scanned at
+			// startup, so the known names list still matches.
+			setConfigChecks(a.items.configItems, a.items.configNames, updated.SelectedConfig)
+			a.restartConfigWatcher()
 		}
 		// Keep the tray menu checkboxes in sync with whatever Settings changed.
 		checkOrUncheck(a.items.launcherAutoUpdate, updated.LauncherUpdate.AutoUpdate)
@@ -760,9 +885,16 @@ func checkOrUncheck(item *systray.MenuItem, checked bool) {
 	}
 }
 
-// watchConfigFiles shows a restart prompt when config.json or tray-config.json change.
-func (a *App) watchConfigFiles() {
-	paths := []string{a.cfg.ConfigPath, filepath.Join(a.exeDir, "tray-config.json")}
+// restartConfigWatcher (re)starts a watcher that shows a restart prompt when
+// the active sing-box config or tray-config.json changes. Called from
+// OnReady and again whenever the active config is switched, since the
+// previous watcher was still watching the old file.
+func (a *App) restartConfigWatcher() {
+	a.mu.Lock()
+	if a.configWatcher != nil {
+		a.configWatcher.Stop()
+	}
+	paths := []string{a.cfg.ActiveConfigPath(), filepath.Join(a.exeDir, "tray-config.json")}
 	w := watcher.New(paths, func(path string) {
 		a.log("file changed: %s", path)
 		appState, _ := a.st.Get()
@@ -775,6 +907,8 @@ func (a *App) watchConfigFiles() {
 		}
 	})
 	w.Start()
+	a.configWatcher = w
+	a.mu.Unlock()
 }
 
 func (a *App) watchState() {
@@ -908,6 +1042,18 @@ func setLanguageChecks(mAuto, mEN, mRU, mUA *systray.MenuItem, langCode string) 
 		mUA.Check()
 	default:
 		mAuto.Check()
+	}
+}
+
+// setConfigChecks checks the item matching selected and unchecks the rest.
+// items and names are parallel slices, as built in OnReady.
+func setConfigChecks(items []*systray.MenuItem, names []string, selected string) {
+	for i, item := range items {
+		if names[i] == selected {
+			item.Check()
+		} else {
+			item.Uncheck()
+		}
 	}
 }
 

@@ -17,6 +17,12 @@ import (
 const (
 	apiBaseURL = "https://api.github.com"
 	userAgent  = "sing-box-tray"
+
+	// wintunDownloadURL points at a specific wintun.net release rather than a
+	// "latest" alias (the site doesn't offer one) — wintun.dll last changed in
+	// 2021, so pinning is low-maintenance in practice.
+	wintunDownloadURL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+	wintunZipDllEntry = "wintun/bin/amd64/wintun.dll"
 )
 
 // Release is a subset of a GitHub release relevant to the updater.
@@ -193,6 +199,33 @@ func DownloadFile(url, destPath string) error {
 		return fmt.Errorf("write %s: %w", destPath, err)
 	}
 	return nil
+}
+
+// DownloadWintunDll downloads the official wintun.dll release zip and
+// extracts the amd64 build to destPath.
+func DownloadWintunDll(destPath string) error {
+	zipPath, err := download(wintunDownloadURL)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(zipPath)
+
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("open wintun zip: %w", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if f.Name != wintunZipDllEntry {
+			continue
+		}
+		if err := extractFile(f, destPath); err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("%s not found in downloaded archive", wintunZipDllEntry)
 }
 
 // extractZip extracts a sing-box release zip into destDir, stripping the

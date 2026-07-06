@@ -36,6 +36,7 @@ type Strings struct {
 	ModeOff          string `json:"mode_off"`
 	ModeSystemProxy  string `json:"mode_system_proxy"`
 	ModeTUN          string `json:"mode_tun"`
+	MenuConfig       string `json:"menu_config"`
 	MenuAutostart    string `json:"menu_autostart"`
 	MenuAutostartTip string `json:"menu_autostart_tip"`
 	MenuUpdates      string `json:"menu_updates"`
@@ -59,11 +60,14 @@ type Strings struct {
 	DialogRestartNowFmt      string `json:"dialog_restart_now_fmt"`
 	DialogErrorFmt           string `json:"dialog_error_fmt"`
 	DialogVersionUnknown     string `json:"dialog_version_unknown"`
+	DialogMissingSingBoxFmt  string `json:"dialog_missing_sing_box_fmt"`
+	DialogMissingWintunFmt   string `json:"dialog_missing_wintun_fmt"`
 
 	SettingsTitle              string `json:"settings_title"`
 	SettingsSingBoxPath        string `json:"settings_sing_box_path"`
 	SettingsWintunPath         string `json:"settings_wintun_path"`
-	SettingsConfigPath         string `json:"settings_config_path"`
+	SettingsConfigDir          string `json:"settings_config_dir"`
+	SettingsActiveConfig       string `json:"settings_active_config"`
 	SettingsBrowse             string `json:"settings_browse"`
 	SettingsAutoUpdateLauncher string `json:"settings_auto_update_launcher"`
 	SettingsAutoUpdateSingBox  string `json:"settings_auto_update_singbox"`

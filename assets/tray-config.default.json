@@ -1,7 +1,8 @@
 {
   "sing_box_path": "sing-box.exe",
   "wintun_dll_path": "wintun.dll",
-  "config_path": "config.json",
+  "config_dir": ".",
+  "selected_config": "config.json",
   "system_proxy_inbound": "",
   "autostart": false,
   "start_on_launch": false,

@@ -37,8 +37,10 @@ func langIndex(code string) int {
 }
 
 // Show opens the settings window, or brings it to front if already open.
+// configNames lists the *.json files found in cfg.ConfigDir (as scanned for
+// the tray's Config submenu, reused here so both pickers stay in sync).
 // onSave is called with the updated config when the user clicks Save.
-func Show(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayConfig)) {
+func Show(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSave func(*config.TrayConfig)) {
 	mu.Lock()
 	existing := mw
 	mu.Unlock()
@@ -51,16 +53,25 @@ func Show(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayCon
 		return
 	}
 
-	go runWindow(cfg, strs, onSave)
+	go runWindow(cfg, strs, configNames, onSave)
 }
 
-func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.TrayConfig)) {
+func configIndex(names []string, selected string) int {
+	for i, n := range names {
+		if n == selected {
+			return i
+		}
+	}
+	return 0
+}
+
+func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSave func(*config.TrayConfig)) {
 	runtime.LockOSThread()
 
 	var w *walk.MainWindow
-	var singBoxEdit, wintunEdit, configEdit *walk.LineEdit
+	var singBoxEdit, wintunEdit, configDirEdit *walk.LineEdit
 	var launcherAutoCheck, singBoxAutoCheck, prereleaseCheck *walk.CheckBox
-	var langCombo *walk.ComboBox
+	var langCombo, configCombo *walk.ComboBox
 
 	browseFn := func(edit **walk.LineEdit, filter string) func() {
 		return func() {
@@ -74,11 +85,21 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 		}
 	}
 
+	browseFolderFn := func(edit **walk.LineEdit) func() {
+		return func() {
+			dlg := &walk.FileDialog{InitialDirPath: (*edit).Text()}
+			if ok, err := dlg.ShowBrowseFolder(w); err == nil && ok {
+				_ = (*edit).SetText(dlg.FilePath)
+			}
+		}
+	}
+
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.SettingsTitle,
-		MinSize:  Size{Width: 550, Height: 310},
-		MaxSize:  Size{Width: 900, Height: 310},
+		Size:     Size{Width: 620, Height: 300},
+		MinSize:  Size{Width: 550, Height: 300},
+		MaxSize:  Size{Width: 900, Height: 300},
 		Layout:   Grid{Columns: 3, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 6},
 		Children: []Widget{
 			Label{Text: strs.SettingsSingBoxPath},
@@ -89,9 +110,12 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 			LineEdit{AssignTo: &wintunEdit, Text: cfg.WintunDllPath},
 			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&wintunEdit, "DLL files (*.dll)|*.dll|All files (*.*)|*.*")},
 
-			Label{Text: strs.SettingsConfigPath},
-			LineEdit{AssignTo: &configEdit, Text: cfg.ConfigPath},
-			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFn(&configEdit, "JSON files (*.json)|*.json|All files (*.*)|*.*")},
+			Label{Text: strs.SettingsConfigDir},
+			LineEdit{AssignTo: &configDirEdit, Text: cfg.ConfigDir},
+			PushButton{Text: strs.SettingsBrowse, OnClicked: browseFolderFn(&configDirEdit)},
+
+			Label{Text: strs.SettingsActiveConfig},
+			ComboBox{AssignTo: &configCombo, Model: configNames, CurrentIndex: configIndex(configNames, cfg.SelectedConfig), ColumnSpan: 2},
 
 			CheckBox{AssignTo: &launcherAutoCheck, Text: strs.SettingsAutoUpdateLauncher, ColumnSpan: 3, Checked: cfg.LauncherUpdate.AutoUpdate},
 			CheckBox{AssignTo: &singBoxAutoCheck, Text: strs.SettingsAutoUpdateSingBox, ColumnSpan: 3, Checked: cfg.Update.AutoUpdate},
@@ -107,7 +131,10 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, onSave func(*config.Tr
 					PushButton{Text: strs.SettingsSave, OnClicked: func() {
 						cfg.SingBoxPath = singBoxEdit.Text()
 						cfg.WintunDllPath = wintunEdit.Text()
-						cfg.ConfigPath = configEdit.Text()
+						cfg.ConfigDir = configDirEdit.Text()
+						if idx := configCombo.CurrentIndex(); idx >= 0 && idx < len(configNames) {
+							cfg.SelectedConfig = configNames[idx]
+						}
 						cfg.LauncherUpdate.AutoUpdate = launcherAutoCheck.Checked()
 						cfg.Update.AutoUpdate = singBoxAutoCheck.Checked()
 						if prereleaseCheck.Checked() {
