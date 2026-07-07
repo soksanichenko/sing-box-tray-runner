@@ -39,8 +39,11 @@ func langIndex(code string) int {
 // Show opens the settings window, or brings it to front if already open.
 // configNames lists the *.json files found in cfg.ConfigDir (as scanned for
 // the tray's Config submenu, reused here so both pickers stay in sync).
+// autostartEnabled is the actual Task Scheduler state (not cfg.Autostart,
+// which is only a write-only mirror — see TrayConfig.Autostart), so the
+// checkbox reflects reality even if the config file is stale.
 // onSave is called with the updated config when the user clicks Save.
-func Show(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSave func(*config.TrayConfig)) {
+func Show(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, autostartEnabled bool, onSave func(*config.TrayConfig)) {
 	mu.Lock()
 	existing := mw
 	mu.Unlock()
@@ -53,7 +56,7 @@ func Show(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSav
 		return
 	}
 
-	go runWindow(cfg, strs, configNames, onSave)
+	go runWindow(cfg, strs, configNames, autostartEnabled, onSave)
 }
 
 // configIndex returns the index of selected within names, falling back to 0
@@ -71,12 +74,12 @@ func configIndex(names []string, selected string) int {
 	return 0
 }
 
-func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, onSave func(*config.TrayConfig)) {
+func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, autostartEnabled bool, onSave func(*config.TrayConfig)) {
 	runtime.LockOSThread()
 
 	var w *walk.MainWindow
 	var singBoxEdit, wintunEdit, configDirEdit *walk.LineEdit
-	var launcherAutoCheck, singBoxAutoCheck, prereleaseCheck *walk.CheckBox
+	var launcherAutoCheck, singBoxAutoCheck, prereleaseCheck, autostartCheck *walk.CheckBox
 	var langCombo, configCombo *walk.ComboBox
 
 	browseFn := func(edit **walk.LineEdit, filter string) func() {
@@ -103,9 +106,9 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, 
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.SettingsTitle,
-		Size:     Size{Width: 620, Height: 300},
-		MinSize:  Size{Width: 550, Height: 300},
-		MaxSize:  Size{Width: 900, Height: 300},
+		Size:     Size{Width: 620, Height: 330},
+		MinSize:  Size{Width: 550, Height: 330},
+		MaxSize:  Size{Width: 900, Height: 330},
 		Layout:   Grid{Columns: 3, Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 6},
 		Children: []Widget{
 			Label{Text: strs.SettingsSingBoxPath},
@@ -126,6 +129,7 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, 
 			CheckBox{AssignTo: &launcherAutoCheck, Text: strs.SettingsAutoUpdateLauncher, ColumnSpan: 3, Checked: cfg.LauncherUpdate.AutoUpdate},
 			CheckBox{AssignTo: &singBoxAutoCheck, Text: strs.SettingsAutoUpdateSingBox, ColumnSpan: 3, Checked: cfg.Update.AutoUpdate},
 			CheckBox{AssignTo: &prereleaseCheck, Text: strs.UsePrereleaseLabel, ColumnSpan: 3, Checked: cfg.Update.Channel == "alpha"},
+			CheckBox{AssignTo: &autostartCheck, Text: strs.MenuAutostart, ColumnSpan: 3, Checked: autostartEnabled},
 
 			Label{Text: strs.SettingsLanguageLabel},
 			ComboBox{AssignTo: &langCombo, Model: langLabels, CurrentIndex: langIndex(cfg.Language), ColumnSpan: 2},
@@ -149,6 +153,7 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, 
 							cfg.Update.Channel = "stable"
 						}
 						cfg.Language = langCodes[langCombo.CurrentIndex()]
+						cfg.Autostart = autostartCheck.Checked()
 						onSave(cfg)
 						w.Close()
 					}},

@@ -18,6 +18,7 @@
   "menu_check_update": "Перевірити оновлення",
   "menu_auto_update": "Автооновлення",
   "menu_view_logs": "Перегляд логів",
+  "menu_about": "Про програму",
   "menu_exit": "Вихід",
 
   "tooltip_stopped": "sing-box зупинено",
@@ -37,6 +38,7 @@
   "dialog_version_unknown": "немає",
   "dialog_missing_sing_box_fmt": "Файл sing-box.exe не знайдено за шляхом:\n%s\n\nЗавантажити останню версію зараз?",
   "dialog_missing_wintun_fmt": "Файл wintun.dll не знайдено за шляхом:\n%s\n\nВін потрібен для режиму TUN. Завантажити його зараз?",
+  "dialog_about_fmt": "%s %s\n\nВерсія %s: %s\n\n%s\nЛіцензія MIT",
 
   "settings_title": "sing-box-tray — Налаштування",
   "settings_sing_box_path": "Шлях до sing-box:",

@@ -10,16 +10,17 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   - **TUN** — injects a TUN inbound into a temp config, requires elevation
 - Tray icon reflects state: grey = stopped, green = running, red = crashed
 - **Config** tray submenu — switch which sing-box config file is active, picked from a folder that can hold several (also duplicated in Settings); the submenu refreshes live if files are added or removed from the folder
-- Settings window to configure paths (sing-box, wintun.dll), the config folder/active config, update options, and language
+- Settings window to configure paths (sing-box, wintun.dll), the config folder/active config, autostart, update options, and language
 - Log viewer with live updates
 - Crash detection with desktop notification
 - File watcher — prompts to restart when config files change
-- Autostart via Task Scheduler (`/RL HIGHEST` for TUN mode)
+- Autostart via Task Scheduler (`/RL HIGHEST` for TUN mode), toggleable from the tray menu (checkbox reflects actual state) or Settings
 - Single instance enforced via named kernel mutex
-- **Updates** tray submenu — auto-updates both the tray launcher itself and the `sing-box` binary from GitHub Releases, each with its own auto-update toggle; sing-box also has a stable/pre-release channel toggle
+- **Updates** tray submenu — auto-updates both the tray launcher itself and the `sing-box` binary from GitHub Releases, each with its own auto-update toggle (on by default); sing-box also has a stable/pre-release channel toggle
 - First-run check — offers to download `sing-box.exe` and `wintun.dll` on startup if either is missing at its configured path
 - **Languages** tray submenu — switch the UI language live, no restart, in addition to auto-detecting it from the Windows locale
 - UI in English, Russian, or Ukrainian
+- **About** tray menu item — shows the tray launcher and sing-box versions plus a link to the project repository
 
 ## Build requirements
 
@@ -67,10 +68,10 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
   },
   "update": {
     "channel": "stable",
-    "auto_update": false
+    "auto_update": true
   },
   "launcher_update": {
-    "auto_update": false
+    "auto_update": true
   },
   "tun": {
     "interface_name": "singbox-tun",
@@ -87,7 +88,7 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 | `config_dir` | Folder scanned (non-recursively) for `*.json` sing-box configs; the tray's **Config** submenu and the Settings config dropdown both list what's found here. |
 | `selected_config` | File name (inside `config_dir`) of the currently active sing-box config. This file is never modified. |
 | `system_proxy_inbound` | Tag of the `http` or `mixed` inbound to read the proxy address from. Leave empty to use the first one found. |
-| `autostart` | Kept in sync with the tray's "Autostart" checkbox (whether the Task Scheduler entry exists); not meant to be hand-edited. |
+| `autostart` | Kept in sync with the "Autostart" checkbox in the tray menu and in Settings (whether the Task Scheduler entry exists); not meant to be hand-edited. |
 | `default_mode` | Starting mode: `off`, `system_proxy`, or `tun`. |
 | `start_on_launch` | If `true`, sing-box starts automatically when the tray app launches. |
 | `log_lines` | Size of the in-memory log buffer shown in the log viewer. |

@@ -16,10 +16,10 @@
   },
   "update": {
     "channel": "stable",
-    "auto_update": false
+    "auto_update": true
   },
   "launcher_update": {
-    "auto_update": false
+    "auto_update": true
   },
   "tun": {
     "interface_name": "singbox-tun",

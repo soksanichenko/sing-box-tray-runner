@@ -43,6 +43,7 @@ type Strings struct {
 	MenuCheckUpdate  string `json:"menu_check_update"`
 	MenuAutoUpdate   string `json:"menu_auto_update"`
 	MenuViewLogs     string `json:"menu_view_logs"`
+	MenuAbout        string `json:"menu_about"`
 	MenuExit         string `json:"menu_exit"`
 
 	TooltipStopped    string `json:"tooltip_stopped"`
@@ -62,6 +63,7 @@ type Strings struct {
 	DialogVersionUnknown     string `json:"dialog_version_unknown"`
 	DialogMissingSingBoxFmt  string `json:"dialog_missing_sing_box_fmt"`
 	DialogMissingWintunFmt   string `json:"dialog_missing_wintun_fmt"`
+	DialogAboutFmt           string `json:"dialog_about_fmt"`
 
 	SettingsTitle              string `json:"settings_title"`
 	SettingsSingBoxPath        string `json:"settings_sing_box_path"`

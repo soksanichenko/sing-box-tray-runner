@@ -89,6 +89,7 @@ type menuItems struct {
 
 	autostart *systray.MenuItem
 	viewLogs  *systray.MenuItem
+	about     *systray.MenuItem
 	quit      *systray.MenuItem
 }
 
@@ -187,6 +188,9 @@ func (a *App) OnReady() {
 	mLogs := systray.AddMenuItem(a.strs.MenuViewLogs, "")
 	systray.AddSeparator()
 
+	mAbout := systray.AddMenuItem(a.strs.MenuAbout, "")
+	systray.AddSeparator()
+
 	mQuit := systray.AddMenuItem(a.strs.MenuExit, "")
 
 	mStop.Disable()
@@ -224,6 +228,7 @@ func (a *App) OnReady() {
 
 		autostart: mAuto,
 		viewLogs:  mLogs,
+		about:     mAbout,
 		quit:      mQuit,
 	}
 
@@ -618,6 +623,21 @@ func (a *App) offerWintunDownload() {
 	a.log("wintun.dll downloaded to %s", a.cfg.WintunDllPath)
 }
 
+// showAbout displays the tray launcher and sing-box versions plus a link to
+// the project repository. The sing-box version is derived the same way the
+// updater does (InstalledVersion), so it only shows a real version if
+// sing_box_path currently points into the tray-managed sing-box/<tag>/
+// folder — a hand-picked or not-yet-updated binary shows as "unknown".
+func (a *App) showAbout() {
+	singBoxVersion := updater.InstalledVersion(a.cfg.SingBoxPath, a.managedSingBoxRoot())
+	if singBoxVersion == "" {
+		singBoxVersion = a.strs.DialogVersionUnknown
+	}
+	repoURL := fmt.Sprintf("https://github.com/%s/%s", launcherOwner, launcherRepo)
+	msg := fmt.Sprintf(a.strs.DialogAboutFmt, appTitle, version.Version, singBoxName, singBoxVersion, repoURL)
+	infoBox(msg, appTitle)
+}
+
 // checkSingBoxUpdate fetches the latest sing-box release for the configured
 // channel. When interactive is false (startup check), it installs silently
 // if cfg.Update.AutoUpdate is set, otherwise it only pushes a toast if a
@@ -886,6 +906,7 @@ func (a *App) refreshMenuTexts() {
 	a.items.autostart.SetTitle(a.strs.MenuAutostart)
 	a.items.autostart.SetTooltip(a.strs.MenuAutostartTip)
 	a.items.viewLogs.SetTitle(a.strs.MenuViewLogs)
+	a.items.about.SetTitle(a.strs.MenuAbout)
 	a.items.quit.SetTitle(a.strs.MenuExit)
 }
 
@@ -894,9 +915,16 @@ func (a *App) openSettings() {
 	prevConfigDir := a.cfg.ConfigDir
 	prevSelectedConfig := a.cfg.SelectedConfig
 	prevChannel := a.cfg.Update.Channel
-	settings.Show(a.cfg, a.strs, a.items.configNames, func(updated *config.TrayConfig) {
+	prevAutostart := autostart.IsEnabled()
+	settings.Show(a.cfg, a.strs, a.items.configNames, prevAutostart, func(updated *config.TrayConfig) {
 		a.log("settings saved: sing-box=%s config=%s", updated.SingBoxPath, updated.ActiveConfigPath())
 		a.proc.SetSingBoxPath(updated.SingBoxPath)
+		if updated.Autostart != prevAutostart {
+			// toggleAutostart flips whatever autostart.IsEnabled() currently
+			// reports, which is still prevAutostart here — nothing else can
+			// have changed it between the two reads.
+			a.toggleAutostart()
+		}
 		if err := updated.Save(a.exeDir); err != nil {
 			a.log("save settings: %s", err)
 		}
@@ -1075,6 +1103,8 @@ func (a *App) handleClicks() {
 			go a.toggleAutostart()
 		case <-a.items.viewLogs.ClickedCh:
 			logwin.Show(a.logBuf, a.cfg.LogLines, a.strs)
+		case <-a.items.about.ClickedCh:
+			go a.showAbout()
 		case <-a.items.quit.ClickedCh:
 			systray.Quit()
 		}

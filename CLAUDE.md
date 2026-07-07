@@ -91,6 +91,10 @@ scripts/
 
 **Linting** (`.golangci.yml`): CI runs `golangci-lint` with `GOOS=windows` (the whole codebase is behind `//go:build windows`, so without it nothing gets analyzed). `errcheck` excludes ignoring the error from `Close()`/`Call()` on file handles, registry keys, `*walk.FormBase`, and Win32 `LazyProc` calls — established convention throughout this codebase, not something to "fix" file-by-file. `staticcheck`'s `ST1001` (no dot-imports) is disabled because `. "github.com/lxn/walk/declarative"` is that library's intended usage; `ST1000` (package doc comments) is disabled because it isn't this project's convention.
 
+**About menu item**: `showAbout` (`tray.go`) builds a message-box string from `version.Version` (this tray build), `updater.InstalledVersion(a.cfg.SingBoxPath, a.managedSingBoxRoot())` (empty/"unknown" unless `sing_box_path` currently points into the tray-managed `sing-box/<tag>/` folder — same derivation the updater itself uses), and a repo URL built from the `launcherOwner`/`launcherRepo` constants already used by the self-updater, so the two never drift apart. Shown via `infoBox`, a plain synchronous `MessageBoxW` call — there's no clickable hyperlink, just the URL as text.
+
+**Autostart toggle**: `toggleAutostart` (`tray.go`) is the single source of truth for actually flipping the Task Scheduler entry (`autostart.Enable`/`Disable`) and syncing `a.items.autostart`'s checkbox + `cfg.Autostart`; it always acts on whatever `autostart.IsEnabled()` currently reports, never on a passed-in target state. Both the tray menu checkbox (checked at `OnReady` from `autostart.IsEnabled()`, since `cfg.Autostart` is a write-only mirror that can go stale) and the Settings checkbox call into this same function rather than duplicating the schtasks logic: `openSettings` captures `prevAutostart := autostart.IsEnabled()` before showing the dialog, passes it into `settings.Show` so the checkbox reflects real state, and in the save callback calls `a.toggleAutostart()` exactly once if `updated.Autostart != prevAutostart` (the Settings dialog itself only stores the checkbox value into `cfg.Autostart`, a plain struct field with no side effects, since `internal/settings` has no access to Task Scheduler or TUN-elevation state).
+
 **Localization** (`internal/i18n/i18n.go`): `Strings` covers every UI-facing string (tray menu, tooltips, toast/dialog text, Settings/Log window chrome), embedded per-language as `assets/locales/{en,ru,ua}.json` and loaded at `init()`. `tray-config.json`'s `language` field is resolved at `main.go` startup (`i18n.Resolve`, falling back to `i18n.Detect()` which reads `GetUserDefaultUILanguage` via kernel32) and passed into `tray.NewApp`. The tray **Languages** submenu and the Settings language dropdown both switch it live (no restart) via `App.applyLanguage`, which recomputes `a.strs` and calls `refreshMenuTexts()` — this relies on `getlantern/systray`'s `(*MenuItem).SetTitle`/`SetTooltip` (confirmed present in the vendored source), so every menu item whose text is translated must be stored on `App.items` even if never clicked (e.g. the "Mode"/"Updates" submenu parents), specifically so it can be retitled later. Proper nouns (`sing-box-tray`, `sing-box`) and the language names/picker label itself are literal constants, never routed through `Strings` — a language picker translated into a language the user doesn't want is unfindable. Per the user's global logging convention, `a.log(...)` calls are deliberately **not** localized and stay in English always; only `i18n` covers the interactive UI.
 
 ## tray-config.json fields
@@ -111,8 +115,8 @@ scripts/
 | `system_proxy.listen` | `127.0.0.1` | |
 | `system_proxy.listen_port` | `2080` | |
 | `update.channel` | `stable` | `stable` / `alpha` — sing-box release channel for the updater |
-| `update.auto_update` | `false` | silently install (and restart sing-box if running) instead of prompting |
-| `launcher_update.auto_update` | `false` | silently self-update (and relaunch) instead of prompting |
+| `update.auto_update` | `true` | silently install (and restart sing-box if running) instead of prompting |
+| `launcher_update.auto_update` | `true` | silently self-update (and relaunch) instead of prompting |
 | `tun.interface_name` | `singbox-tun` | |
 | `tun.address` | `["172.19.0.1/30"]` | |
 | `tun.mtu` | `9000` | |
