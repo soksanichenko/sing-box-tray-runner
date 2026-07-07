@@ -9,7 +9,7 @@ A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.
   - **System Proxy** — sets Windows HTTP proxy from the sing-box config inbound
   - **TUN** — injects a TUN inbound into a temp config, requires elevation
 - Tray icon reflects state: grey = stopped, green = running, red = crashed
-- **Config** tray submenu — switch which sing-box config file is active, picked from a folder that can hold several (also duplicated in Settings)
+- **Config** tray submenu — switch which sing-box config file is active, picked from a folder that can hold several (also duplicated in Settings); the submenu refreshes live if files are added or removed from the folder
 - Settings window to configure paths (sing-box, wintun.dll), the config folder/active config, update options, and language
 - Log viewer with live updates
 - Crash detection with desktop notification
@@ -100,7 +100,7 @@ Only the Go toolchain is needed, on either host platform — no C compiler, no W
 
 ### Config
 
-`config_dir` can hold several sing-box config files side by side. The tray's **Config** submenu lists every `*.json` file found there (scanned once at startup) and lets you pick which one is active; picking a different one restarts sing-box live if it's running. The same list is duplicated as a dropdown in Settings. Adding or removing files in `config_dir` while the tray is running won't be picked up until restart.
+`config_dir` can hold several sing-box config files side by side. The tray's **Config** submenu lists every `*.json` file found there and lets you pick which one is active; picking a different one restarts sing-box live if it's running. The same list is duplicated as a dropdown in Settings. The folder is polled every 2 seconds while the tray is running, so adding or removing files in `config_dir` refreshes the submenu automatically without needing to restart the tray.
 
 ### System Proxy mode
 

@@ -63,3 +63,66 @@ func (w *Watcher) check() {
 		}
 	}
 }
+
+// DirWatcher polls a directory listing (via list) and fires onChange whenever
+// it differs from the previous poll — e.g. a config file was added, renamed,
+// or removed. Unlike Watcher, it doesn't compare mtimes: the caller's list
+// func decides what belongs in the listing (see config.ListConfigFiles).
+type DirWatcher struct {
+	dir      string
+	list     func(dir string) ([]string, error)
+	names    []string
+	onChange func()
+	stop     chan struct{}
+}
+
+func NewDir(dir string, list func(dir string) ([]string, error), onChange func()) *DirWatcher {
+	names, _ := list(dir)
+	return &DirWatcher{
+		dir:      dir,
+		list:     list,
+		names:    names,
+		onChange: onChange,
+		stop:     make(chan struct{}),
+	}
+}
+
+func (w *DirWatcher) Start() {
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				w.check()
+			case <-w.stop:
+				return
+			}
+		}
+	}()
+}
+
+func (w *DirWatcher) Stop() {
+	close(w.stop)
+}
+
+func (w *DirWatcher) check() {
+	names, err := w.list(w.dir)
+	if err != nil || sameNames(names, w.names) {
+		return
+	}
+	w.names = names
+	w.onChange()
+}
+
+func sameNames(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

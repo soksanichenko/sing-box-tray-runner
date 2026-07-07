@@ -103,11 +103,12 @@ type App struct {
 	releaseMutex func()
 	strs         i18n.Strings
 
-	mu            sync.Mutex
-	items         menuItems
-	tempCfg       string
-	pendingStart  bool
-	configWatcher *watcher.Watcher
+	mu               sync.Mutex
+	items            menuItems
+	tempCfg          string
+	pendingStart     bool
+	configWatcher    *watcher.Watcher
+	configDirWatcher *watcher.DirWatcher
 }
 
 func NewApp(cfg *config.TrayConfig, exeDir string, initialMode state.ProxyMode, releaseMutex func(), strs i18n.Strings) *App {
@@ -229,6 +230,7 @@ func (a *App) OnReady() {
 	go a.watchState()
 	go a.handleClicks()
 	a.restartConfigWatcher()
+	a.restartConfigDirWatcher()
 
 	go func() {
 		a.checkFirstRunDeps()
@@ -907,6 +909,7 @@ func (a *App) openSettings() {
 			// match what's on disk — rescan and rebuild it.
 			a.rebuildConfigMenu(updated.ConfigDir)
 			a.restartConfigWatcher()
+			a.restartConfigDirWatcher()
 		case updated.SelectedConfig != prevSelectedConfig:
 			setConfigChecks(a.items.configItems, a.items.configNames, updated.SelectedConfig)
 			a.restartConfigWatcher()
@@ -952,6 +955,26 @@ func (a *App) restartConfigWatcher() {
 	})
 	w.Start()
 	a.configWatcher = w
+	a.mu.Unlock()
+}
+
+// restartConfigDirWatcher (re)starts a watcher that rebuilds the Config
+// submenu whenever the set of *.json files in ConfigDir changes — e.g. the
+// user drops a new sing-box config into the folder while the tray is
+// running. Called from OnReady and again whenever ConfigDir is changed via
+// Settings, since the previous watcher was still watching the old folder.
+func (a *App) restartConfigDirWatcher() {
+	a.mu.Lock()
+	if a.configDirWatcher != nil {
+		a.configDirWatcher.Stop()
+	}
+	dir := a.cfg.ConfigDir
+	w := watcher.NewDir(dir, config.ListConfigFiles, func() {
+		a.log("config dir changed, rebuilding menu: %s", dir)
+		a.rebuildConfigMenu(dir)
+	})
+	w.Start()
+	a.configDirWatcher = w
 	a.mu.Unlock()
 }
 
