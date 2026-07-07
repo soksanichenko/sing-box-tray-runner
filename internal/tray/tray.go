@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/zelgray/sing-box-tray/assets"
+	"github.com/zelgray/sing-box-tray/internal/aboutwin"
 	"github.com/zelgray/sing-box-tray/internal/autostart"
 	"github.com/zelgray/sing-box-tray/internal/config"
 	"github.com/zelgray/sing-box-tray/internal/elevation"
@@ -625,19 +626,20 @@ func (a *App) offerWintunDownload() {
 	a.log("wintun.dll downloaded to %s", a.cfg.WintunDllPath)
 }
 
-// showAbout displays the tray launcher and sing-box versions plus a link to
-// the project repository. The sing-box version is derived the same way the
-// updater does (InstalledVersion), so it only shows a real version if
-// sing_box_path currently points into the tray-managed sing-box/<tag>/
-// folder — a hand-picked or not-yet-updated binary shows as "unknown".
+// showAbout displays the tray launcher and sing-box versions plus a
+// clickable link to the project repository. The sing-box version is derived
+// the same way the updater does (InstalledVersion), so it only shows a real
+// version if sing_box_path currently points into the tray-managed
+// sing-box/<tag>/ folder — a hand-picked or not-yet-updated binary shows as
+// "unknown". A plain MessageBox can't have a clickable link, so this opens a
+// small walk window (aboutwin) instead of using infoBox.
 func (a *App) showAbout() {
 	singBoxVersion := updater.InstalledVersion(a.cfg.SingBoxPath, a.managedSingBoxRoot())
 	if singBoxVersion == "" {
 		singBoxVersion = a.strs.DialogVersionUnknown
 	}
 	repoURL := fmt.Sprintf("https://github.com/%s/%s", launcherOwner, launcherRepo)
-	msg := fmt.Sprintf(a.strs.DialogAboutFmt, appTitle, version.Version, singBoxName, singBoxVersion, repoURL)
-	infoBox(msg, appTitle)
+	aboutwin.Show(a.strs, appTitle, version.Version, singBoxName, singBoxVersion, repoURL)
 }
 
 // checkSingBoxUpdate fetches the latest sing-box release for the configured
