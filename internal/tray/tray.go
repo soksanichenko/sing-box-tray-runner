@@ -554,6 +554,7 @@ func (a *App) toggleAutostart() {
 	if autostart.IsEnabled() {
 		if err := autostart.Disable(); err != nil {
 			a.log("disable autostart: %s", err)
+			infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
 			return
 		}
 		a.items.autostart.Uncheck()
@@ -563,6 +564,7 @@ func (a *App) toggleAutostart() {
 		elevated := mode == state.ModeTUN
 		if err := autostart.Enable(elevated); err != nil {
 			a.log("enable autostart: %s", err)
+			infoBox(fmt.Sprintf(a.strs.DialogErrorFmt, err), appTitle)
 			return
 		}
 		a.items.autostart.Check()
@@ -925,6 +927,13 @@ func (a *App) openSettings() {
 			// have changed it between the two reads.
 			a.toggleAutostart()
 		}
+		// Re-read the real Task Scheduler state rather than trusting the
+		// checkbox value: if toggleAutostart's schtasks call failed, it
+		// already showed an error dialog, but updated.Autostart still holds
+		// the user's requested (unapplied) value — persisting that would
+		// silently drift tray-config.json away from reality.
+		updated.Autostart = autostart.IsEnabled()
+		checkOrUncheck(a.items.autostart, updated.Autostart)
 		if err := updated.Save(a.exeDir); err != nil {
 			a.log("save settings: %s", err)
 		}
