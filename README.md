@@ -1,3 +1,5 @@
+<img src="assets/icons/logo.png" width="96" alt="sing-box-tray icon">
+
 # sing-box-tray
 
 A minimal Windows system tray launcher for [sing-box](https://sing-box.sagernet.org/).
