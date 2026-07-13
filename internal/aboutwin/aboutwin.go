@@ -13,6 +13,7 @@ import (
 	"github.com/lxn/win"
 	"golang.org/x/sys/windows"
 
+	"github.com/zelgray/sing-box-tray/internal/appicon"
 	"github.com/zelgray/sing-box-tray/internal/i18n"
 )
 
@@ -43,9 +44,15 @@ func runWindow(strs i18n.Strings, appTitle, trayVersion, singBoxName, singBoxVer
 
 	var w *walk.MainWindow
 
+	var winIcon walk.Image
+	if ic := appicon.Icon(); ic != nil {
+		winIcon = ic
+	}
+
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.MenuAbout,
+		Icon:     winIcon,
 		MinSize:  Size{Width: 340, Height: 160},
 		Size:     Size{Width: 340, Height: 160},
 		Layout:   VBox{Margins: Margins{Left: 12, Top: 12, Right: 12, Bottom: 12}, Spacing: 6},

@@ -10,6 +10,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
 
+	"github.com/zelgray/sing-box-tray/internal/appicon"
 	"github.com/zelgray/sing-box-tray/internal/config"
 	"github.com/zelgray/sing-box-tray/internal/i18n"
 )
@@ -103,9 +104,15 @@ func runWindow(cfg *config.TrayConfig, strs i18n.Strings, configNames []string, 
 		}
 	}
 
+	var winIcon walk.Image
+	if ic := appicon.Icon(); ic != nil {
+		winIcon = ic
+	}
+
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.SettingsTitle,
+		Icon:     winIcon,
 		Size:     Size{Width: 620, Height: 330},
 		MinSize:  Size{Width: 550, Height: 330},
 		MaxSize:  Size{Width: 900, Height: 330},

@@ -16,6 +16,7 @@ import (
 	. "github.com/lxn/walk/declarative"
 	"github.com/lxn/win"
 
+	"github.com/zelgray/sing-box-tray/internal/appicon"
 	"github.com/zelgray/sing-box-tray/internal/i18n"
 	"github.com/zelgray/sing-box-tray/internal/logbuf"
 )
@@ -48,9 +49,15 @@ func runWindow(buf *logbuf.Buffer, maxLines int, strs i18n.Strings) {
 	var w *walk.MainWindow
 	var te *walk.TextEdit
 
+	var winIcon walk.Image
+	if ic := appicon.Icon(); ic != nil {
+		winIcon = ic
+	}
+
 	if err := (MainWindow{
 		AssignTo: &w,
 		Title:    strs.LogWindowTitle,
+		Icon:     winIcon,
 		MinSize:  Size{Width: 700, Height: 400},
 		Size:     Size{Width: 900, Height: 500},
 		Layout:   VBox{MarginsZero: true},

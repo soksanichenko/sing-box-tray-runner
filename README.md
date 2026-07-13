@@ -138,11 +138,11 @@ scripts\build.ps1    # native Windows (PowerShell), no `make` required
 
 The output is `build/sing_box_tray_runner.exe`. Set a `VERSION` env var (e.g. `VERSION=v1.2.3 ./scripts/build.sh`) to embed a version string the tray launcher's self-updater can compare against — this is how `release.yml` builds tagged releases; local dev builds leave it unset (`"dev"`).
 
-The `rsrc.syso` file in the repo root embeds a Windows manifest (Common Controls v6). It is linked automatically by the Go toolchain and enables proper visual styling for the Settings and Log windows. Regenerate it if the manifest changes:
+The `rsrc.syso` file in the repo root embeds a Windows manifest (Common Controls v6) and the app icon (`assets/icons/working.ico`). It is linked automatically by the Go toolchain and enables proper visual styling for the Settings and Log windows. Regenerate it if the manifest or icon changes:
 
 ```sh
 go install github.com/akavel/rsrc@latest
-rsrc -manifest app.manifest -o rsrc.syso
+rsrc -manifest app.manifest -ico assets/icons/working.ico -o rsrc.syso
 ```
 
 ## CI/CD

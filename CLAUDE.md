@@ -19,10 +19,10 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build \
 
 `scripts/build.sh`/`build.ps1` accept an optional `VERSION` env var, appended as `-ldflags -X .../internal/version.Version=$VERSION` — `release.yml` sets it from the pushed tag; unset (dev builds) leaves `version.Version` at its `"dev"` default.
 
-`rsrc.syso` in the repo root is a pre-generated Windows resource object that embeds `app.manifest` (Common Controls v6 dependency). The Go toolchain links it automatically. Without it, `lxn/walk` windows fail silently. Regenerate with:
+`rsrc.syso` in the repo root is a pre-generated Windows resource object that embeds `app.manifest` (Common Controls v6 dependency) and `assets/icons/working.ico` (the exe's own icon, shown by Explorer/taskbar pinning — separate from any individual window's icon, see **Window icons** below). The Go toolchain links it automatically. Without the manifest, `lxn/walk` windows fail silently. Regenerate with:
 
 ```sh
-~/go/bin/rsrc -manifest app.manifest -o rsrc.syso
+~/go/bin/rsrc -manifest app.manifest -ico assets/icons/working.ico -o rsrc.syso
 ```
 
 ## Architecture
@@ -39,6 +39,7 @@ internal/
   elevation/          — IsElevated, RelaunchAsAdmin (ShellExecuteW "runas")
   autostart/          — HKCU Run key for normal autostart, Task Scheduler (schtasks.exe, CREATE_NO_WINDOW) for elevated (TUN) autostart
   logbuf/             — circular log buffer, file mirror with timestamps, subscriptions
+  appicon/            — shared *walk.Icon for the lxn/walk windows (Settings/Log/About), loaded from a temp-file copy of assets.IconGrey
   logwin/             — lxn/walk log viewer window
   settings/           — lxn/walk settings window
   aboutwin/           — lxn/walk About window (version info + clickable repo link)
@@ -48,7 +49,7 @@ internal/
   version/            — Version var, overridden via -ldflags at release build time
   i18n/               — UI string catalog (en/ru/ua), OS locale detection, live menu retitling
 assets/
-  icons.go            — generates grey/green/red ICO bytes at init (BMP-in-ICO format)
+  icons.go            — embeds grey/green/red tray-state ICO files (assets/icons/*.ico) via go:embed
   defaults.go         — embeds tray-config.default.json
   locales.go          — embeds locales/*.json (loaded by internal/i18n)
 scripts/
@@ -64,9 +65,11 @@ scripts/
 
 **Single instance**: named kernel mutex `Global\SingBoxTray`. On UAC re-launch, the existing process must call `CloseHandle` on the mutex _before_ `os.Exit(0)` — `os.Exit` skips defers. The `releaseMutex` func is passed from `main` → `tray.NewApp`.
 
-**Tray icons**: `getlantern/systray` on Windows calls `LoadImage(LR_LOADFROMFILE, IMAGE_ICON)`. PNG bytes are silently ignored. Icons must be ICO format (ICONDIR + ICONDIRENTRY + BITMAPINFOHEADER + BGRA pixels + AND mask). See `assets/icons.go`.
+**Tray icons**: `getlantern/systray` on Windows calls `LoadImage(LR_LOADFROMFILE, IMAGE_ICON)`. PNG bytes are silently ignored. Icons must be ICO format — `assets/icons/{idling,working,error}.ico` are real multi-resolution (16/32/48/256) artwork, embedded via `go:embed` in `assets/icons.go`.
 
 **lxn/walk windows**: require `runtime.LockOSThread()` on the goroutine that creates them, and a Windows manifest with Common Controls v6 (`rsrc.syso`). Without the manifest the window creation fails silently.
+
+**Window icons**: Settings/Log/About windows showed no icon in the taskbar/title bar. Root cause: `lxn/walk`'s window-class registration (`MustRegisterWindowClassWithWndProcPtrAndStyle` in the vendored library) does `LoadIcon(hInst, MAKEINTRESOURCE(7))` as its class-icon fallback — a convention from an older `rsrc` default — but this project's `rsrc.syso` assigns resource IDs in embed order (manifest gets 1, then the icon group gets 2), so ID 7 never resolves and Windows silently falls back to the generic system icon for every `lxn/walk` window. Fix: `internal/appicon` (`Icon() *walk.Icon`) explicitly sets each window's `Icon` property (`MainWindow{Icon: ...}`), which drives `WM_SETICON` directly instead of relying on the class default. `walk.NewIconFromFile` re-reads from disk per DPI, so it can't take embedded `[]byte` directly — `appicon.Icon()` writes `assets.IconGrey` to a fixed path in `os.TempDir()` once (`sync.Once`) and loads from there; the resulting `*walk.Icon` is shared across all three windows. Callers assign into a `var winIcon walk.Image` (interface-typed) guarded by `if ic := appicon.Icon(); ic != nil`, not a bare `*walk.Icon`, to avoid passing a typed-nil pointer into the `Icon Property` field — `declarative.ImageFrom`'s `case nil:` only catches a true untyped nil interface, so a typed-nil `*walk.Icon` would fall through to `case Image` and could panic when methods are called on it.
 
 **TUN mode**: requires elevation. When TUN is selected without admin rights, `RelaunchAsAdmin` spawns an elevated instance with `--force-mode=tun`. The non-elevated instance releases the mutex immediately then exits (no sleep).
 
