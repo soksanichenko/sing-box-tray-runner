@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
@@ -20,11 +21,28 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: ./scripts/build.sh
+      - name: Upload unsigned artifact
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing_box_tray_runner-unsigned
+          path: build/sing_box_tray_runner.exe
+      - name: Submit signing request
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: 'TODO-signpath-org-id'
+          project-slug: 'TODO-signpath-project-slug'
+          signing-policy-slug: 'release-signing'
+          artifact-configuration-slug: 'default'
+          github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'build/signed'
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
-            build/sing_box_tray_runner.exe \
+            build/signed/sing_box_tray_runner.exe \
             --title "${{ github.ref_name }}" \
             --generate-notes
