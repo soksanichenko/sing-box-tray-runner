@@ -149,6 +149,7 @@ rsrc -manifest app.manifest -ico assets/icons/working.ico -o rsrc.syso
 
 - **CI** (`.github/workflows/ci.yml`) — on every push/PR: `golangci-lint` (with `GOOS=windows`) plus a build matrix on `ubuntu-latest` and `windows-latest` to verify both `scripts/build.sh` and `scripts/build.ps1` work.
 - **Release** (`.github/workflows/release.yml`) — pushing a `v*` tag (e.g. `git tag v1.0.0 && git push --tags`) builds the exe (with the tag embedded as its version, so the launcher's own self-updater can detect it) and publishes it as a GitHub Release with auto-generated notes.
+- **Auto release** (`.github/workflows/auto-release.yml`) — when a Dependabot PR that changes `go.mod`/`go.sum` is merged to `main`, the next patch tag is created automatically (`v1.0.1` → `v1.0.2`; a two-part tag like `v0.7` becomes `v0.7.1`) and the Release workflow is run for it. GitHub Actions bumps don't change the binary and don't trigger a release.
 - **Dependabot** (`.github/dependabot.yml`) — weekly PRs for Go module and GitHub Actions updates.
 
 ## License

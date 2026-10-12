@@ -1,0 +1,59 @@
+name: Auto release
+
+# A merged Dependabot bump of the Go dependencies rebuilds the exe with new
+# code, so it gets its own patch release. GitHub Actions bumps don't touch
+# go.mod/go.sum and never match the paths filter.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - go.mod
+      - go.sum
+
+permissions:
+  contents: read
+
+# queue: max keeps every waiting run, so two quick merges still get two
+# distinct tags (the default only keeps the newest pending run).
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  tag:
+    if: github.event.head_commit.author.name == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # all tags, to find the latest version
+      - name: Create the next patch tag
+        id: next
+        run: |
+          LAST=$(git tag --list 'v[0-9]*' | grep -E '^v[0-9]+(\.[0-9]+){1,2}$' | sort -V | tail -n 1)
+          if [ -z "$LAST" ]; then
+            echo "No existing vX.Y[.Z] tag to increment" >&2
+            exit 1
+          fi
+          # v0.7 -> v0.7.1, v1.0.1 -> v1.0.2
+          IFS=. read -r -a PARTS <<< "${LAST#v}"
+          while [ "${#PARTS[@]}" -lt 3 ]; do PARTS+=(0); done
+          PARTS[2]=$((PARTS[2] + 1))
+          NEXT="v${PARTS[0]}.${PARTS[1]}.${PARTS[2]}"
+          git tag "$NEXT" "$GITHUB_SHA"
+          git push origin "refs/tags/$NEXT"
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: tag
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
