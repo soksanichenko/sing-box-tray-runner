@@ -154,4 +154,4 @@ rsrc -manifest app.manifest -ico assets/icons/working.ico -o rsrc.syso
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](https://opensource.org/licenses/MIT)
